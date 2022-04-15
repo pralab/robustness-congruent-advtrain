@@ -1,6 +1,5 @@
-*.i
-*.ii
-*.gpu
-*.ptx
-*.cubin
-*.fatbin
+/datasets/Cifar10/
+.idea/
+/models/
+/churnenv/
+/data/
