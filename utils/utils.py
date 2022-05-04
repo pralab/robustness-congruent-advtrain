@@ -2,11 +2,25 @@ import torch
 import numpy as np
 import random
 import argparse
+import logging
+from secml.utils import fm
 
-# ordinati per autoattack robust accuracy da leaderboard cifar10 linf
-MODEL_NAMES = ['Kang2021Stable',
+# ordinati per autoattack robust accuracy da leaderboard cifar10 linf, (l'ultimo è il più top)
+MODEL_NAMES = ['Gowal2021Improving_70_16_ddpm_100m',
                'Rebuffi2021Fixing_70_16_cutmix_extra',
-               'Gowal2021Improving_70_16_ddpm_100m']
+               'Kang2021Stable']
+# todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
+
+advx_fname = lambda model_name: f'advx_WB_{model_name}.gz'
+preds_fname = lambda model_name: f"{model_name}_predictions.csv"
+PERF_FNAME = 'performance_table.csv'
+NFLIPS_FNAME = 'neg_flips_table.csv'
+
+ADVX_DIRNAME_DEFAULT = 'advx'
+PREDS_DIRNAME_DEFAULT = 'predictions'
+RESULTS_DIRNAME_DEFAULT = 'results'
+
+COLUMN_NAMES = ['Clean'] + MODEL_NAMES
 
 def set_all_seed(seed):
     torch.manual_seed(seed)
@@ -19,11 +33,36 @@ def set_all_seed(seed):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-seed', default=0, type=int)
-    parser.add_argument('-n_examples', default=30, type=int)
-    parser.add_argument('-epsilon_list', default=[8/255], nargs="+", type=int)
+    parser.add_argument('-n_examples', default=5, type=int)
+    parser.add_argument('-eps', default=0.1, type=float)
     parser.add_argument('-n_steps', default=10,  type=int)
-    parser.add_argument('-n_models', default=3, type=int)
+    parser.add_argument('-n_models', default=10, type=int)
     parser.add_argument('-batch_size', default=2, type=int)
+    parser.add_argument('-root', default='data', type=str)
+    parser.add_argument('-exp_name', default='exp', type=str)
     args = parser.parse_args()
     return args
 
+def init_logger(root):
+    logger = logging.getLogger('progress')
+    logger.setLevel(logging.DEBUG)
+
+    fh = logging.FileHandler(fm.join(root, 'progress.log'))
+    # formatter_file = logging.Formatter('%(asctime)s - %(message)s')
+    formatter = logging.Formatter('[%(asctime)s] %(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
+                                  '%m-%d %H:%M:%S')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    streamhandler = logging.StreamHandler()
+    streamhandler.setFormatter(fh)
+    logger.addHandler(streamhandler)
+    return logger
+
+def save_params(local_items, dirname):
+    s = ''
+    for k, v in local_items:
+        s += f"{k}: {v}\n"
+
+    with open(fm.join(dirname, "info.txt"), 'w') as f:
+        f.write(s)

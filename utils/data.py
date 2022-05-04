@@ -26,5 +26,5 @@ def get_cifar10_dataset(ds='train', normalize=True, download=True):
 
 
 if __name__ == '__main__':
-    ds = get_cifar10_dataset()
+    dataset = get_cifar10_dataset()
     print("")
