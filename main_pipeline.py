@@ -39,7 +39,7 @@ logger = init_logger(EXP_FOLDER_NAME)
 
 set_all_seed(SEED)
 
-model_names = MODEL_NAMES[:N_MODELS]
+model_names = MODEL_NAMES
 
 save_params(locals().items(), EXP_FOLDER_NAME)
 logger.info('Parameters saved.')
