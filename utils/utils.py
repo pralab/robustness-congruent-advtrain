@@ -6,9 +6,9 @@ import logging
 from secml.utils import fm
 
 # ordinati per autoattack robust accuracy da leaderboard cifar10 linf, (l'ultimo è il più top)
-MODEL_NAMES = ['Gowal2021Improving_70_16_ddpm_100m',
-               'Rebuffi2021Fixing_70_16_cutmix_extra',
-               'Kang2021Stable']
+MODEL_NAMES = ['Standard',
+               'Sehwag2020Hydra',
+               'Gowal2020Uncovering_28_10_extra']
 # todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
 
 advx_fname = lambda model_name: f'advx_WB_{model_name}.gz'
@@ -20,7 +20,7 @@ ADVX_DIRNAME_DEFAULT = 'advx'
 PREDS_DIRNAME_DEFAULT = 'predictions'
 RESULTS_DIRNAME_DEFAULT = 'results'
 
-COLUMN_NAMES = ['Clean'] + MODEL_NAMES
+COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
 def set_all_seed(seed):
     torch.manual_seed(seed)

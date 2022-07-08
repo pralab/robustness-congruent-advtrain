@@ -4,7 +4,7 @@ import pickle
 from utils.utils import advx_fname, ADVX_DIRNAME_DEFAULT
 
 import foolbox as fb
-# from adv_lib.attacks import auto_pgd
+from adv_lib.attacks.auto_pgd import apgd
 
 import time
 
@@ -26,21 +26,28 @@ def generate_advx(x_test, y_test, model_names, eps,
 
 
         # ------ COMPUTE ADVX ------ #
-        # todo: questo si può incapsulare meglio per scegliere l'attacco da terminale
-        fmodel = fb.PyTorchModel(model, bounds=(0, 1))
-        attack = fb.attacks.LinfPGD(steps=n_steps)
+
 
         # todo: fare un po' di debug degli attacchi, logger, verbose ecc
         start = time.time()
-        # lista esterna sono gli epsilon, lista interna sono i sample
-        _, advs, success = attack(fmodel, x_test, y_test, epsilons=[eps])
+
+        # # todo: questo si può incapsulare meglio per scegliere l'attacco da terminale
+        # fmodel = fb.PyTorchModel(model, bounds=(0, 1))
+        # attack = fb.attacks.LinfPGD(steps=n_steps)
+        # # lista esterna sono gli epsilon, lista interna sono i sample
+        # _, advs, success = attack(fmodel, x_test, y_test, epsilons=[eps])
+        # advx = advs[0]
+
+        advx = apgd(model, x_test, y_test,
+                    eps=eps, norm=float('inf'), n_iter=n_steps)
+
         end = time.time()
-        logger.debug('Robust accuracy: {:.1%}'.format(1 - success.float().mean()))
+        # logger.debug('Robust accuracy: {:.1%}'.format(1 - success.float().mean()))
         logger.debug(f"Took {end - start:.2f} s")
 
         # ------ SAVE ADVX ------ #
         with open(fm.join(advx_folder, advx_fname(model_name)), 'wb') as f:
             # prendo advs[0] perchè sto usando un solo epsilon
-            pickle.dump(advs[0], f)
+            pickle.dump(advx, f)
 
     print("")

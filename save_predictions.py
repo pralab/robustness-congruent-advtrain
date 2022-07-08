@@ -8,7 +8,7 @@ from utils.utils import preds_fname, advx_fname, PREDS_DIRNAME_DEFAULT, \
     ADVX_DIRNAME_DEFAULT, COLUMN_NAMES
 
 
-def save_predictions(model_names, x_test, batch_size,
+def save_predictions(model_names, x_test, y_test, batch_size,
                      exp_folder_name, device, logger):
 
     advx_folder = fm.join(exp_folder_name, ADVX_DIRNAME_DEFAULT)
@@ -27,6 +27,7 @@ def save_predictions(model_names, x_test, batch_size,
 
     for i, model_name_i in enumerate(model_names):
         predictions_df = pd.DataFrame(columns=COLUMN_NAMES)
+        predictions_df['True'] = y_test
 
         # ------ LOAD MODEL ------ #
         logger.debug(f"Loading model {i}: {model_name_i}")
@@ -46,6 +47,14 @@ def save_predictions(model_names, x_test, batch_size,
             predictions_df[column_name] = preds
         predictions_df.to_csv(fm.join(predictions_folder, preds_fname(model_name_i)))
 
+    # ### MODIFICA TEMPORANEA PER AGGIUNGERE LE TRUE LABEL AL CSV
+    # for i, model_name_i in enumerate(model_names):
+    #     predictions_df = pd.read_csv(fm.join(predictions_folder, preds_fname(model_name_i)),
+    #                                  index_col=0)
+    #     if not 'True' in predictions_df.columns:
+    #         predictions_df.insert(loc=0, column='True', value=y_test)
+    #         predictions_df.to_csv(fm.join(predictions_folder, preds_fname(model_name_i)))
+    #         print(predictions_df.head(10))
 
 
     print("")
