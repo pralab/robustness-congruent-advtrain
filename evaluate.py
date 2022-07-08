@@ -1,6 +1,7 @@
 from secml.utils import fm
 import pandas as pd
 import os
+import numpy as np
 from utils.eval import compute_nflips
 from utils.utils import preds_fname, PERF_FNAME, NFLIPS_FNAME, \
     RESULTS_DIRNAME_DEFAULT, PREDS_DIRNAME_DEFAULT, \
@@ -10,12 +11,10 @@ pd.set_option('display.max_rows', 500)
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 
-def evaluate_pipeline(model_names, y, exp_folder_name, logger):
-    y = pd.Series(y.tolist())
-
-    performances_df = pd.DataFrame(columns=COLUMN_NAMES)
+def evaluate_pipeline(model_names, exp_folder_name, logger):
+    performances_df = pd.DataFrame(columns=COLUMN_NAMES[1:])
     performances_df.index.name = 'model'
-    nflips_df = pd.DataFrame(columns=COLUMN_NAMES)
+    nflips_df = pd.DataFrame(columns=COLUMN_NAMES[1:])
     nflips_df.index.name = 'model'
 
     predictions_folder = fm.join(exp_folder_name, PREDS_DIRNAME_DEFAULT)
@@ -28,34 +27,86 @@ def evaluate_pipeline(model_names, y, exp_folder_name, logger):
     if not fm.folder_exist(results_folder):
         fm.make_folder(results_folder)
 
+
+    clean_accs = [] # each entry is clean acc of model i
+    # Looping on the rows (models)
     for i, model_name_i in enumerate(model_names):
         df = pd.read_csv(fm.join(predictions_folder, preds_fname(model_name_i)),
                          index_col=0)
+        correct_preds_df = pd.DataFrame(columns=COLUMN_NAMES[1:])
+        true_labels_df = df.pop('True')
+        for c in df:
+            correct_preds_df[c] = (df[c] == true_labels_df)
 
-        # Compute performance
-        data = []
-        for j, col in enumerate(df):
-            if j > i + 1:
-                data.append(None)
-            else:
-                acc = (df[col] == y).mean()
-                data.append(acc)
-        performances_df.loc[model_name_i] = data
+        clean_accs.append(correct_preds_df['Clean'].mean())
+        # correct_preds_df is specific for each model
+        # A row of correct_preds_df refer to a original sample,
+        # columns refer to perturbations of this sample:
+        # first column is Clean, so no perturbation, and then all advx optimized on each model of the sequence
+        # the entry (i,j) is True if the sample is classified correctly by the model
 
-        # Compute Negative Flips
-        nfs = []
-        for j, col in enumerate(df):
-            if i == 0 or j > i:
-                nfs.append(None)
-            else:
-                old_df = pd.read_csv(fm.join(predictions_folder, preds_fname(model_names[i-1])), index_col=0)
-                nf = compute_nflips(old_preds=old_df[df.columns[j]], new_preds=df[df.columns[j]], y=y)
-                nfs.append(nf)
-        nflips_df.loc[model_name_i] = nfs
+        rob_accs = []
+        # compute robust accs
+        for j, cols in enumerate(COLUMN_NAMES[1:]):
+            rob_acc = correct_preds_df[COLUMN_NAMES[1:2+j]].all(axis=1).mean()
+            # rob_acc = atk_succ_df[cols].mean()
+            rob_accs.append(rob_acc)
+        performances_df.loc[model_name_i] = rob_accs
 
-    logger.info(f"\n---------------\nAccuracy\n---------------\n{performances_df}")
+    performances_df = (performances_df * 100).round(2)
     performances_df.to_csv(fm.join(results_folder, PERF_FNAME))
-    logger.info(f"\n---------------\nNegative Flips\n---------------\n{nflips_df}")
-    nflips_df.to_csv(fm.join(results_folder, NFLIPS_FNAME))
-
+    print(performances_df)
     print("")
+
+
+
+
+# def evaluate_pipeline(model_names, y, exp_folder_name, logger):
+#     y = pd.Series(y.tolist())
+#
+#     performances_df = pd.DataFrame(columns=COLUMN_NAMES)
+#     performances_df.index.name = 'model'
+#     nflips_df = pd.DataFrame(columns=COLUMN_NAMES)
+#     nflips_df.index.name = 'model'
+#
+#     predictions_folder = fm.join(exp_folder_name, PREDS_DIRNAME_DEFAULT)
+#
+#     # ------ ASSERTIONS AND FOLDER MANAGEMENT ------ #
+#     assert fm.folder_exist(predictions_folder), 'You must run save_predictions first'
+#     assert len(os.listdir(predictions_folder)) > 0, 'Predictions directory is empty'
+#
+#     results_folder = fm.join(exp_folder_name, RESULTS_DIRNAME_DEFAULT)
+#     if not fm.folder_exist(results_folder):
+#         fm.make_folder(results_folder)
+#
+#     for i, model_name_i in enumerate(model_names):
+#         df = pd.read_csv(fm.join(predictions_folder, preds_fname(model_name_i)),
+#                          index_col=0)
+#
+#         # Compute performance
+#         data = []
+#         for j, col in enumerate(df):
+#             if j > i + 1:
+#                 data.append(None)
+#             else:
+#                 acc = (df[col] == y).mean()
+#                 data.append(acc)
+#         performances_df.loc[model_name_i] = data
+#
+#         # Compute Negative Flips
+#         nfs = []
+#         for j, col in enumerate(df):
+#             if i == 0 or j > i:
+#                 nfs.append(None)
+#             else:
+#                 old_df = pd.read_csv(fm.join(predictions_folder, preds_fname(model_names[i-1])), index_col=0)
+#                 nf = compute_nflips(old_preds=old_df[df.columns[j]], new_preds=df[df.columns[j]], y=y)
+#                 nfs.append(nf)
+#         nflips_df.loc[model_name_i] = nfs
+#
+#     logger.info(f"\n---------------\nAccuracy\n---------------\n{performances_df}")
+#     performances_df.to_csv(fm.join(results_folder, PERF_FNAME))
+#     logger.info(f"\n---------------\nNegative Flips\n---------------\n{nflips_df}")
+#     nflips_df.to_csv(fm.join(results_folder, NFLIPS_FNAME))
+#
+#     print("")

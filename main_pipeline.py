@@ -12,7 +12,7 @@ import logging
 args = parse_args()
 
 SEED = args.seed
-N_EXAMPLES = args.n_examples    #50
+N_EXAMPLES = 312 #args.n_examples    #50
 
 #Attack constants
 EPSILON = args.eps  #32/255
@@ -23,8 +23,8 @@ N_MODELS = args.n_models
 BATCH_SIZE = args.batch_size    #10
 
 ROOT = args.root    #'data'
-# EXP_FOLDER_NAME = f'data/pipeline day-03-05-2022 hr-16-42-10'
-EXP_FOLDER_NAME = fm.join(ROOT, args.exp_name)
+EXP_FOLDER_NAME = 'data/312example_250step_day-12-05-2022_hr-19-03-44'
+# EXP_FOLDER_NAME = fm.join(ROOT, args.exp_name)
 # EXP_FOLDER_NAME = fm.join(ROOT, f'pipeline {datetime.now().strftime("day-%d-%m-%Y hr-%H-%M-%S")}')
 # EXP_FOLDER_NAME = fm.join(ROOT, f'{args.exp_name} {datetime.now().strftime("day-%d-%m-%Y hr-%H-%M-%S")}')
 if not fm.folder_exist(EXP_FOLDER_NAME):
@@ -41,24 +41,24 @@ set_all_seed(SEED)
 
 model_names = MODEL_NAMES[:N_MODELS]
 
-save_params(locals().items(), EXP_FOLDER_NAME)
-logger.info('Parameters saved.')
-
 # ------ LOAD CIFAR10 ------ #
 x_test, y_test = load_cifar10(n_examples=N_EXAMPLES, data_dir='datasets/Cifar10')
 
-logger.info("Generating ADVX")
-generate_advx(x_test=x_test, y_test=y_test,
-              model_names=model_names,
-              eps=EPSILON, n_steps=N_STEPS,
-              exp_folder_name=EXP_FOLDER_NAME, logger=logger, device=DEVICE)
+# save_params(locals().items(), EXP_FOLDER_NAME)
+# logger.info('Parameters saved.')
 
-logger.info("Computing predictions")
-save_predictions(model_names=model_names, x_test=x_test,
-                 batch_size=BATCH_SIZE, exp_folder_name=EXP_FOLDER_NAME,
-                 device=DEVICE, logger=logger)
+# logger.info("Generating ADVX")
+# generate_advx(x_test=x_test, y_test=y_test,
+#               model_names=model_names,
+#               eps=EPSILON, n_steps=N_STEPS,
+#               exp_folder_name=EXP_FOLDER_NAME, logger=logger, device=DEVICE)
+#
+# logger.info("Computing predictions")
+# save_predictions(model_names=model_names, x_test=x_test, y_test=y_test,
+#                  batch_size=BATCH_SIZE, exp_folder_name=EXP_FOLDER_NAME,
+#                  device=DEVICE, logger=logger)
 
-evaluate_pipeline(model_names=model_names, y=y_test,
+evaluate_pipeline(model_names=model_names,
                   exp_folder_name=EXP_FOLDER_NAME, logger=logger)
 print("")
 
