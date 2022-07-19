@@ -23,7 +23,7 @@ N_MODELS = args.n_models
 BATCH_SIZE = args.batch_size    #10
 
 ROOT = args.root    #'data'
-EXP_FOLDER_NAME = 'data/312example_250step_day-12-05-2022_hr-19-03-44'
+EXP_FOLDER_NAME = 'data/2ksample_250steps_100batchsize_day-09-07-2022_hr-19-46-34'
 # EXP_FOLDER_NAME = fm.join(ROOT, args.exp_name)
 # EXP_FOLDER_NAME = fm.join(ROOT, f'pipeline {datetime.now().strftime("day-%d-%m-%Y hr-%H-%M-%S")}')
 # EXP_FOLDER_NAME = fm.join(ROOT, f'{args.exp_name} {datetime.now().strftime("day-%d-%m-%Y hr-%H-%M-%S")}')
@@ -35,14 +35,12 @@ DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 # create logger
 logger = init_logger(EXP_FOLDER_NAME)
 
-
-
 set_all_seed(SEED)
 
-model_names = MODEL_NAMES[:N_MODELS]
+model_names = MODEL_NAMES   #[:N_MODELS]
 
 # ------ LOAD CIFAR10 ------ #
-x_test, y_test = load_cifar10(n_examples=N_EXAMPLES, data_dir='datasets/Cifar10')
+# x_test, y_test = load_cifar10(n_examples=N_EXAMPLES, data_dir='datasets/Cifar10')
 
 # save_params(locals().items(), EXP_FOLDER_NAME)
 # logger.info('Parameters saved.')
