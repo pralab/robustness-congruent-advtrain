@@ -5,7 +5,7 @@ import pandas as pd
 def predict(model, x, batch_size, device):
     preds = []
     n_examples = x.shape[0]
-    x.to(device)
+    x = x.to(device)
     model.to(device)
     with torch.no_grad():
         for batch_i in range(math.ceil(n_examples / batch_size)):

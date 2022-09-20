@@ -5,10 +5,50 @@ import argparse
 import logging
 from secml.utils import fm
 
-# ordinati per autoattack robust accuracy da leaderboard cifar10 linf, (l'ultimo è il più top)
-MODEL_NAMES = ['Standard',
-               'Sehwag2020Hydra',
-               'Gowal2020Uncovering_28_10_extra']
+# ordinati dalla leaderboard su github (a fine pagina)
+
+
+MODEL_NAMES = ['Standard', #81
+'Engstrom2019Robustness', #53
+'Rice2020Overfitting', #44
+'Zhang2020Attacks', #43
+'Rade2021Helper_R18_ddpm', #30
+'Addepalli2021Towards_WRN34', #25
+'Carmon2019Unlabeled', #23
+'Hendrycks2019Using', #18
+'Kang2021Stable', #6
+'Gowal2020Uncovering_70_16_extra', #3
+'Gowal2021Improving_70_16_ddpm_100m' #2
+]
+
+# MODEL_NAMES = ['Addepalli2021Towards_WRN34',
+# 'Chan2020Jacobian',
+# 'Cui2020Learnable_34_20',
+# 'Engstrom2019Robustness',
+# 'Hendrycks2019Using',
+# 'Jang2019Adversarial',
+# 'Kang2021Stable']
+
+# MODEL_NAMES = ['Rebuffi2021Fixing_70_16_cutmix_extra',
+# 'Gowal2020Uncovering_70_16_extra',
+# 'Rebuffi2021Fixing_70_16_cutmix_ddpm',
+# 'Gowal2021Improving_28_10_ddpm_100m',
+# 'Rade2021Helper_extra',
+# 'Sehwag2021Proxy_ResNest152',
+# 'Dai2021Parameterizing',
+# 'Rebuffi2021Fixing_28_10_cutmix_ddpm',
+# 'Sehwag2021Proxy',
+# 'Zhang2020Geometry',
+# 'Addepalli2021Towards_WRN34',
+# 'Rade2021Helper_R18_extra',
+# 'Rebuffi2021Fixing_R18_ddpm',
+# 'Wu2020Adversarial',
+# 'Pang2020Boosting',
+# 'Rice2020Overfitting',
+# 'Cui2020Learnable_34_10',
+# 'Addepalli2021Towards_RN18',
+# 'Andriushchenko2020Understanding',
+# 'Wong2020Fast']
 # todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
 
 advx_fname = lambda model_name: f'advx_WB_{model_name}.gz'
@@ -30,12 +70,25 @@ def set_all_seed(seed):
     random.seed(seed)
 
 
+# def parse_args():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('-seed', default=0, type=int)
+#     parser.add_argument('-n_examples', default=5, type=int)
+#     parser.add_argument('-eps', default=0.1, type=float)
+#     parser.add_argument('-n_steps', default=10,  type=int)
+#     parser.add_argument('-n_models', default=10, type=int)
+#     parser.add_argument('-batch_size', default=2, type=int)
+#     parser.add_argument('-root', default='data', type=str)
+#     parser.add_argument('-exp_name', default='exp', type=str)
+#     args = parser.parse_args()
+#     return args
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-seed', default=0, type=int)
-    parser.add_argument('-n_examples', default=5, type=int)
-    parser.add_argument('-eps', default=0.1, type=float)
-    parser.add_argument('-n_steps', default=10,  type=int)
+    parser.add_argument('-n_examples', default=6, type=int)
+    parser.add_argument('-eps', default=0.03, type=float)
+    parser.add_argument('-n_steps', default=250,  type=int)
     parser.add_argument('-n_models', default=10, type=int)
     parser.add_argument('-batch_size', default=2, type=int)
     parser.add_argument('-root', default='data', type=str)
