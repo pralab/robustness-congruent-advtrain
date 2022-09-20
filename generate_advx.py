@@ -5,7 +5,11 @@ from utils.utils import advx_fname, ADVX_DIRNAME_DEFAULT
 import math
 import torch
 
+<<<<<<< HEAD
 # import foolbox as fb
+=======
+import foolbox as fb
+>>>>>>> 146be9dd04e37ede9115366392e010c7b7a42240
 from adv_lib.attacks.auto_pgd import apgd
 
 import time
@@ -31,6 +35,7 @@ def generate_advx(x_test, y_test, batch_size, model_names, eps,
 
             # ------ COMPUTE ADVX ------ #
 
+<<<<<<< HEAD
 
             # todo: fare un po' di debug degli attacchi, logger, verbose ecc
             start = time.time()
@@ -42,6 +47,32 @@ def generate_advx(x_test, y_test, batch_size, model_names, eps,
             # _, advs, success = attack(fmodel, x_test, y_test, epsilons=[eps])
             # advx = advs[0]
             # x_test, y_test = x_test.to(device), y_test.to(device)
+=======
+        # ------ COMPUTE ADVX ------ #
+
+
+        # todo: fare un po' di debug degli attacchi, logger, verbose ecc
+        start = time.time()
+
+        # # todo: questo si può incapsulare meglio per scegliere l'attacco da terminale
+        # fmodel = fb.PyTorchModel(model, bounds=(0, 1))
+        # attack = fb.attacks.LinfPGD(steps=n_steps)
+        # # lista esterna sono gli epsilon, lista interna sono i sample
+        # _, advs, success = attack(fmodel, x_test, y_test, epsilons=[eps])
+        # advx = advs[0]
+
+        advx = apgd(model, x_test, y_test,
+                    eps=eps, norm=float('inf'), n_iter=n_steps)
+
+        end = time.time()
+        # logger.debug('Robust accuracy: {:.1%}'.format(1 - success.float().mean()))
+        logger.debug(f"Took {end - start:.2f} s")
+
+        # ------ SAVE ADVX ------ #
+        with open(fm.join(advx_folder, advx_fname(model_name)), 'wb') as f:
+            # prendo advs[0] perchè sto usando un solo epsilon
+            pickle.dump(advx, f)
+>>>>>>> 146be9dd04e37ede9115366392e010c7b7a42240
 
             
             advx = torch.Tensor([])

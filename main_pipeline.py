@@ -14,7 +14,11 @@ import logging
 args = parse_args()
 
 SEED = args.seed
+<<<<<<< HEAD
 N_EXAMPLES = args.n_examples
+=======
+N_EXAMPLES = 312 #args.n_examples    #50
+>>>>>>> 146be9dd04e37ede9115366392e010c7b7a42240
 
 #Attack constants
 EPSILON = args.eps  #32/255
@@ -39,6 +43,7 @@ assert DEVICE != 'cpu'
 # create logger
 logger = init_logger(EXP_FOLDER_NAME)
 
+<<<<<<< HEAD
 
 set_all_seed(SEED)
 
@@ -64,6 +69,29 @@ save_predictions(model_names=model_names, x_test=x_test, y_test=y_test,
                  device=DEVICE, logger=logger)
 
 logger.info("Evaluations")
+=======
+set_all_seed(SEED)
+
+model_names = MODEL_NAMES   #[:N_MODELS]
+
+# ------ LOAD CIFAR10 ------ #
+# x_test, y_test = load_cifar10(n_examples=N_EXAMPLES, data_dir='datasets/Cifar10')
+
+# save_params(locals().items(), EXP_FOLDER_NAME)
+# logger.info('Parameters saved.')
+
+# logger.info("Generating ADVX")
+# generate_advx(x_test=x_test, y_test=y_test,
+#               model_names=model_names,
+#               eps=EPSILON, n_steps=N_STEPS,
+#               exp_folder_name=EXP_FOLDER_NAME, logger=logger, device=DEVICE)
+#
+# logger.info("Computing predictions")
+# save_predictions(model_names=model_names, x_test=x_test, y_test=y_test,
+#                  batch_size=BATCH_SIZE, exp_folder_name=EXP_FOLDER_NAME,
+#                  device=DEVICE, logger=logger)
+
+>>>>>>> 146be9dd04e37ede9115366392e010c7b7a42240
 evaluate_pipeline(model_names=model_names,
                   exp_folder_name=EXP_FOLDER_NAME, logger=logger)
 
