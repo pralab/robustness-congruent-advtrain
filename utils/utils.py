@@ -67,6 +67,7 @@ custom_dirname = lambda dirname, ft_models=False, tr_set=False: f"{dirname}{'_ft
 PREDS_DIRNAME_DEFAULT = 'predictions'
 RESULTS_DIRNAME_DEFAULT = 'results'
 FINETUNING_DIRNAME_DEFAULT = 'finetuned_models'
+FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
