@@ -38,12 +38,9 @@ def show_batch(x, transforms=None, figsize=(10, 20)):
     plt.show()
 
 
-def show_loss(root, fname):
-    csv_path = fm.join(root, f"{fname}.csv")
-    fig_path = fm.join(root, f"{fname}.pdf")
-    df = pd.read_csv(fm.join(root, f"{fname}.csv"), index_col='iter')
-
-    df.plot(x='iter', kind='line')
+def show_loss(csv_path, fig_path):
+    df = pd.read_csv(csv_path, index_col='epoch')
+    df.plot(kind='line')
     plt.savefig(fig_path)
 
     print("")

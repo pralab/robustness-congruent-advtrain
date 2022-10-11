@@ -1,6 +1,7 @@
 from robustbench.utils import load_model
 from secml.utils import fm
 import pickle
+from utils.utils import MODEL_NAMES
 from utils.utils import advx_fname, custom_dirname, ADVX_DIRNAME_DEFAULT, FINETUNING_DIRNAME_DEFAULT
 import math
 import torch
@@ -14,9 +15,13 @@ import time
 def generate_advx(x, y, batch_size, model_names, eps,
                   n_steps, exp_folder_name, logger, device, ft_models=False, tr_set=False):
     """
-    ft_models e tr_set specificano solo una cartella diversa rispetto agli advx per i modelli originali sul test set
+    ft_models e tr_set specificano solo una cartella diversa rispetto agli advx 
+    per i modelli originali sul test set
+
+    cartella advx_folder con dentro gli advx WB per ogni modello selezionato
     """
-    advx_folder = fm.join(exp_folder_name, custom_dirname(ADVX_DIRNAME_DEFAULT, tr_set=True))
+    advx_folder = fm.join(exp_folder_name, custom_dirname(ADVX_DIRNAME_DEFAULT, 
+                                                        ft_models=ft_models, tr_set=tr_set))
     if not fm.folder_exist(advx_folder):
         fm.make_folder(advx_folder)
 
@@ -63,4 +68,15 @@ def generate_advx(x, y, batch_size, model_names, eps,
             logger.debug(f"{model_name} not processed.")
             nope_list.append(model_name)
     print(f"Model not processed:\n{nope_list}")
+    print("")
+
+if __name__ == '__main__':
+    exp_folder_name = 'data/2ksample_250steps_100batchsize_bancoprova'
+    advx_folder = fm.join(exp_folder_name, custom_dirname(ADVX_DIRNAME_DEFAULT, 
+                                                    ft_models=False, tr_set=True))
+    for model_name in MODEL_NAMES:
+        with open(fm.join(advx_folder, advx_fname(model_name)), 'rb') as f:
+            # prendo advs[0] perchè sto usando un solo epsilon
+            advx = pickle.load(f)
+        print(f"{model_name} -> {advx.shape[0]}")
     print("")

@@ -81,7 +81,7 @@ def save_predictions(model_names, x_test, y_test, batch_size,
 
     print("")
 
-def save_trainset_predictions(model_names, x_train, y_train, batch_size,
+def save_trainset_predictions(model_names, x_train, batch_size,
                             exp_folder_name, device, logger, pred_clean=True, pred_advx=False):
 
     predictions_trset_folder = fm.join(exp_folder_name, custom_dirname(PREDS_DIRNAME_DEFAULT, tr_set=True))
@@ -90,8 +90,8 @@ def save_trainset_predictions(model_names, x_train, y_train, batch_size,
     if not fm.folder_exist(predictions_trset_folder):
         fm.make_folder(predictions_trset_folder)
 
-    if not fm.folder_exist(advx_folder):
-        fm.make_folder(advx_folder)
+    # if not fm.folder_exist(advx_folder):
+    #     fm.make_folder(advx_folder)
 
     for model_id, model_name in enumerate(model_names):
         logger.debug(f"model {model_id} ({model_name})")
@@ -122,4 +122,12 @@ def save_trainset_predictions(model_names, x_train, y_train, batch_size,
 
 
 
-    # fare una folder solo per prediction del train, con un file per ogni modello
+if __name__ == '__main__':
+    exp_folder_name = 'data/2ksample_250steps_100batchsize_bancoprova'
+    predictions_trset_folder = fm.join(exp_folder_name, custom_dirname(PREDS_DIRNAME_DEFAULT, tr_set=True))
+    
+    for model_name in MODEL_NAMES:
+        with open(fm.join(predictions_trset_folder, f"{model_name}.gz"), 'rb') as f:
+            data = pickle.load(f)
+            print(f"{model_name} -> {data['outs'].shape[0]}")
+    print("")

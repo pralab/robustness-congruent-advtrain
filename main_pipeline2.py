@@ -12,41 +12,38 @@ import robustbench.model_zoo as mzoo
 from utils.utils import load_train_set
 from utils.eval import predict
 
-args = parse_args()
-SEED = args.seed
-N_EXAMPLES = args.n_examples
-N_TR_EXAMPLES = args.n_tr_examples
+SEED = 0
+N_EXAMPLES = 2000
+N_TR_EXAMPLES = 50000
 
 #Attack constants
-EPSILON = args.eps  #32/255
-N_STEPS = args.n_steps  #30
-# N_MODELS = args.n_models
+EPSILON = 32/255
+N_STEPS = 250
 
 #Predictions constants
 BATCH_SIZE = 200 #args.batch_size    #10
-ROOT = args.root    #'data'
+ROOT = 'data'
+
+LR = 1e-4
+EPOCHS = 100
+GAMMA1 = 0
+GAMMA2 = 0
+
 
 EXP_FOLDER_NAME = 'data/2ksample_250steps_100batchsize_bancoprova'
-# EXP_FOLDER_NAME = 'data/banco_prova_POCHIsamples'
-# EXP_FOLDER_NAME = 'data/banco_prova_2ksamples'
-# EXP_FOLDER_NAME = fm.join(ROOT, args.exp_name)
-# EXP_FOLDER_NAME = fm.join(ROOT, f'pipeline {datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")}')
-# EXP_FOLDER_NAME = fm.join(ROOT, f'{args.exp_name}_{datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")}')
-# EXP_FOLDER_NAME = EXP_FOLDER_NAME.replace(' ', '_')
-
-# EXP_FT_FOLDER_NAME = fm.join(EXP_FOLDER_NAME, 'finetuning', f'{args.exp_ft_name}_{datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")}')
 EXP_FT_FOLDER_NAME = fm.join(EXP_FOLDER_NAME, 'finetuning' 'ft_prova')
-DEVICE = f'cuda:{args.cuda_id}' if torch.cuda.is_available() else 'cpu'
+DEVICE = f'cuda:0' if torch.cuda.is_available() else 'cpu'
 assert DEVICE != 'cpu'
 
 set_all_seed(SEED)
 
 model_names = MODEL_NAMES[:3]
+save_params(locals().items(), EXP_FT_FOLDER_NAME, 'info2')
 
 # if not fm.folder_exist(EXP_FOLDER_NAME):
 #     fm.make_folder(EXP_FOLDER_NAME)
 # create logger
-logger1 = init_logger(EXP_FOLDER_NAME)
+# logger1 = init_logger(EXP_FOLDER_NAME)
 # save_params(locals().items(), EXP_FOLDER_NAME, 'info2')
 # logger1.info('Parameters saved.')
 
@@ -99,7 +96,7 @@ STEP 2
 NB: codice per generare advx sul train set è importante usare stesso codice del test, 
 così si ha lo stesso threat model
 """
-# logger_tr = init_logger(EXP_FOLDER_NAME, fname='progress_tr')
+logger_tr = init_logger(EXP_FOLDER_NAME, fname='progress_tr')
 # logger_tr.info("Computing Advx of train set")
 # generate_advx(x=x_train, y=y_train, batch_size=BATCH_SIZE,
 #               model_names=model_names,
@@ -107,28 +104,24 @@ così si ha lo stesso threat model
 #               exp_folder_name=EXP_FOLDER_NAME, logger=logger_tr, device=DEVICE,
 #               tr_set=True)
 
-# logger_tr.info("Computing outputs for train samples")
-# save_trainset_predictions(model_names=model_names, x_train=x_train, y_train=y_train,
-#                  batch_size=BATCH_SIZE, exp_folder_name=EXP_FOLDER_NAME,
-#                  device=DEVICE, logger=logger_tr, pred_advx=True)
+logger_tr.info("Computing outputs for train samples")
+save_trainset_predictions(model_names=model_names, x_train=x_train, y_train=y_train,
+                 batch_size=BATCH_SIZE, exp_folder_name=EXP_FOLDER_NAME,
+                 device=DEVICE, logger=logger_tr, pred_advx=False)
 
-if not fm.folder_exist(EXP_FT_FOLDER_NAME):
-    fm.make_folder(EXP_FT_FOLDER_NAME)
-# create logger
+# if not fm.folder_exist(EXP_FT_FOLDER_NAME):
+#     fm.make_folder(EXP_FT_FOLDER_NAME)
+# # create logger
 
-LR = args.lr
-EPOCHS = args.epochs
-GAMMA1 = args.gamma1
-GAMMA2 = args.gamma2
-save_params(locals().items(), EXP_FT_FOLDER_NAME, 'info2')
 
-logger_ft = init_logger(EXP_FT_FOLDER_NAME, fname='progress_ft')
-logger_ft.info("Positive Congruent Finetuning")
-finetuning_pipeline(model_names=model_names, 
-                    x_train=x_train, y_train=y_train,
-                    batch_size=BATCH_SIZE, epochs=EPOCHS,
-                    exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft, device=DEVICE,
-                    lr=LR, gamma1=GAMMA1, gamma2=GAMMA2)
+
+# logger_ft = init_logger(EXP_FT_FOLDER_NAME, fname='progress_ft')
+# logger_ft.info("Positive Congruent Finetuning")
+# finetuning_pipeline(model_names=model_names, 
+#                     x_train=x_train, y_train=y_train,
+#                     batch_size=BATCH_SIZE, epochs=EPOCHS,
+#                     exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft, device=DEVICE,
+#                     lr=LR, gamma1=GAMMA1, gamma2=GAMMA2)
 
 
 """

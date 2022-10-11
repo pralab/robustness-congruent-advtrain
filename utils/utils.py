@@ -78,38 +78,54 @@ def set_all_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-
+# Default
 # def parse_args():
 #     parser = argparse.ArgumentParser()
 #     parser.add_argument('-seed', default=0, type=int)
-#     parser.add_argument('-n_examples', default=5, type=int)
-#     parser.add_argument('-eps', default=0.1, type=float)
-#     parser.add_argument('-n_steps', default=10,  type=int)
-#     parser.add_argument('-n_models', default=10, type=int)
-#     parser.add_argument('-batch_size', default=2, type=int)
+#     parser.add_argument('-n_examples', default=20, type=int)
+#     parser.add_argument('-n_tr_examples', default=20, type=int)
+#     parser.add_argument('-eps', default=0.03, type=float)
+#     parser.add_argument('-n_steps', default=5,  type=int)
+#     parser.add_argument('-n_models', default=5, type=int)
+#     parser.add_argument('-batch_size', default=5, type=int)
 #     parser.add_argument('-root', default='data', type=str)
 #     parser.add_argument('-exp_name', default='exp', type=str)
+#     parser.add_argument('-exp_ft_name', default='exp_ft', type=str)
+#     parser.add_argument('-cuda_id', default=0, type=int)
+#     # Finetuning parameters
+#     parser.add_argument('-lr', default=1e-1, type=float)
+#     parser.add_argument('-epochs', default=10, type=int)
+#     parser.add_argument('-gamma1', default=1, type=float)
+#     parser.add_argument('-gamma2', default=0, type=float)
 #     args = parser.parse_args()
 #     return args
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-seed', default=0, type=int)
-    parser.add_argument('-n_examples', default=20, type=int)
+    parser.add_argument('-n_examples', default=200, type=int)
+    parser.add_argument('-n_tr_examples', default=500, type=int)
     parser.add_argument('-eps', default=0.03, type=float)
-    parser.add_argument('-n_steps', default=5,  type=int)
-    parser.add_argument('-n_models', default=5, type=int)
-    parser.add_argument('-batch_size', default=5, type=int)
+    parser.add_argument('-n_steps', default=250,  type=int)
+    parser.add_argument('-n_models', default=11, type=int)
+    parser.add_argument('-batch_size', default=100, type=int)
     parser.add_argument('-root', default='data', type=str)
     parser.add_argument('-exp_name', default='exp', type=str)
+    parser.add_argument('-exp_ft_name', default='exp_ft', type=str)
+    parser.add_argument('-cuda_id', default=0, type=int)
+    # Finetuning parameters
+    parser.add_argument('-lr', default=1e-1, type=float)
+    parser.add_argument('-epochs', default=100, type=int)
+    parser.add_argument('-gamma1', default=1, type=float)
+    parser.add_argument('-gamma2', default=0, type=float)
     args = parser.parse_args()
     return args
 
-def init_logger(root):
-    logger = logging.getLogger('progress')
+def init_logger(root, fname='progress'):
+    logger = logging.getLogger(fname)
     logger.setLevel(logging.DEBUG)
 
-    fh = logging.FileHandler(fm.join(root, 'progress.log'))
+    fh = logging.FileHandler(fm.join(root, f'{fname}.log'))
     # formatter_file = logging.Formatter('%(asctime)s - %(message)s')
     formatter = logging.Formatter('[%(asctime)s] %(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
                                   '%m-%d %H:%M:%S')
@@ -121,12 +137,12 @@ def init_logger(root):
     logger.addHandler(streamhandler)
     return logger
 
-def save_params(local_items, dirname):
+def save_params(local_items, dirname, fname):
     s = ''
     for k, v in local_items:
         s += f"{k}: {v}\n"
 
-    with open(fm.join(dirname, "info.txt"), 'w') as f:
+    with open(fm.join(dirname, f"{fname}.txt"), 'w') as f:
         f.write(s)
 
 
