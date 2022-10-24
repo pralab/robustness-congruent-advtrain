@@ -17,29 +17,23 @@ from utils.utils import load_train_set
 from utils.eval import predict
 import pandas as pd
 
-# args = parse_args()
+from utils.data import get_cifar10_dataset
+
 SEED = 0
 N_EXAMPLES = 2000
-
-#Predictions constants
-BATCH_SIZE = 500 #args.batch_size    #10
+BATCH_SIZE = 500
 ROOT = 'data'
-
 EXP_FOLDER_NAME = 'data/2ksample_250steps_100batchsize_bancoprova'
-
+EXP_FT_FOLDER_NAME = fm.join(EXP_FOLDER_NAME, 'finetuning')
 DEVICE = f'cuda:0' if torch.cuda.is_available() else 'cpu'
-assert DEVICE != 'cpu'
+model_names = MODEL_NAMES[:3]
 
 set_all_seed(SEED)
 
-model_names = MODEL_NAMES[:3]
-
-
-EXP_FT_FOLDER_NAME = fm.join(EXP_FOLDER_NAME, 'finetuning')
-
 
 # ------ LOAD CIFAR10 ------ #
-x_test, y_test = load_cifar10(n_examples=N_EXAMPLES, data_dir='datasets/Cifar10')
+test_dataset = get_cifar10_dataset(train=False, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
 id=0
 dirname = f'ft_prova_0_1ep_nofreeze'
@@ -73,37 +67,5 @@ f"Finetuned:\nA0: {acc0}, A1: {acc1_ft}, C: {churn_ft}")
 print("")
 
 
-
-# from utils.visualization import show_loss
-
-# debug_path = fm.join(EXP_FOLDER_NAME, 'debug_loss')
-# if not fm.folder_exist(debug_path):
-#     fm.make_folder(debug_path)
-
-# for dirname in fm.listdir(EXP_FT_FOLDER_NAME):
-#     exp_ft_path = fm.join(EXP_FT_FOLDER_NAME, dirname)
-#     gamma1 = exp_ft_path.split('gamma1-')[1].split('_day')[0]
-#     fm.copy_folder(fm.join(exp_ft_path, 'ft_debug'), fm.join(debug_path, f"{gamma1}"))
-#     print("")
-#     # show_loss()
-
-
-
-
-# questa run serve contro i modelli finetunati, per valutare robustezza
-# logger_ft_res.info("Generating ADVX")
-# generate_advx(x=x_test, y=y_test, batch_size=BATCH_SIZE,
-#               model_names=model_names,
-#               eps=EPSILON, n_steps=N_STEPS,
-#               exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft_res, device=DEVICE, ft_models=True)
-
-# logger_ft_res.info("Computing predictions")
-# save_predictions(model_names=model_names, x_test=x_test, y_test=y_test,
-#                  batch_size=BATCH_SIZE, exp_folder_name=EXP_FT_FOLDER_NAME,
-#                  device=DEVICE, logger=logger_ft_res, ft_models=True)
-
-# logger_ft_res.info("Evaluations")
-# evaluate_pipeline(model_names=model_names,
-#                     exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft_res, ft_models=True)
 
 print("")

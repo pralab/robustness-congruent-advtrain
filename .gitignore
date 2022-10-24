@@ -3,5 +3,8 @@
 /models/
 /churnenv/
 /data/
+/datasets/
+/images/
+/logs/
 __pycache__
 *.out
