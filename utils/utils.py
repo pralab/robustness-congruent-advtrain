@@ -5,31 +5,55 @@ import argparse
 import logging
 from secml.utils import fm
 
-# ordinati per autoattack robust accuracy da leaderboard cifar10 linf, (l'ultimo è il più top)
-# MODEL_NAMES = ['Standard',
-#                'Sehwag2020Hydra',
-#                'Gowal2020Uncovering_28_10_extra']
+from typing import Tuple, Optional
+import torch.utils.data as data
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 
-# MODEL_NAMES = ['Standard', #81
-#                'Engstrom2019Robustness', #53
-#                'Rice2020Overfitting', #44
-#                'Zhang2020Attacks', #43
-#                'Rade2021Helper_R18_ddpm', #30
-#                'Addepalli2021Towards_WRN34', #25
-#                'Carmon2019Unlabeled', #23
-#                'Hendrycks2019Using', #18
-#                'Kang2021Stable', #6
-#                'Gowal2020Uncovering_70_16_extra', #3
-#                'Gowal2021Improving_70_16_ddpm_100m' #2
-#                ]
+# ordinati dalla leaderboard su github (a fine pagina)
 
-MODEL_NAMES = ['Standard', 'Engstrom2019Robustness', 'Rice2020Overfitting',
-       'Zhang2020Attacks', 'Hendrycks2019Using',
-       'Rade2021Helper_R18_ddpm', 'Addepalli2021Towards_WRN34',
-       'Carmon2019Unlabeled', 'Kang2021Stable',
-       'Gowal2020Uncovering_70_16_extra',
-       'Gowal2021Improving_70_16_ddpm_100m']
 
+MODEL_NAMES = ['Standard', #81
+'Engstrom2019Robustness', #53
+'Rice2020Overfitting', #44
+'Zhang2020Attacks', #43
+'Rade2021Helper_R18_ddpm', #30
+'Addepalli2021Towards_WRN34', #25
+'Carmon2019Unlabeled', #23
+'Hendrycks2019Using', #18
+'Kang2021Stable', #6
+'Gowal2020Uncovering_70_16_extra', #3
+'Gowal2021Improving_70_16_ddpm_100m' #2
+]
+
+# MODEL_NAMES = ['Addepalli2021Towards_WRN34',
+# 'Chan2020Jacobian',
+# 'Cui2020Learnable_34_20',
+# 'Engstrom2019Robustness',
+# 'Hendrycks2019Using',
+# 'Jang2019Adversarial',
+# 'Kang2021Stable']
+
+# MODEL_NAMES = ['Rebuffi2021Fixing_70_16_cutmix_extra',
+# 'Gowal2020Uncovering_70_16_extra',
+# 'Rebuffi2021Fixing_70_16_cutmix_ddpm',
+# 'Gowal2021Improving_28_10_ddpm_100m',
+# 'Rade2021Helper_extra',
+# 'Sehwag2021Proxy_ResNest152',
+# 'Dai2021Parameterizing',
+# 'Rebuffi2021Fixing_28_10_cutmix_ddpm',
+# 'Sehwag2021Proxy',
+# 'Zhang2020Geometry',
+# 'Addepalli2021Towards_WRN34',
+# 'Rade2021Helper_R18_extra',
+# 'Rebuffi2021Fixing_R18_ddpm',
+# 'Wu2020Adversarial',
+# 'Pang2020Boosting',
+# 'Rice2020Overfitting',
+# 'Cui2020Learnable_34_10',
+# 'Addepalli2021Towards_RN18',
+# 'Andriushchenko2020Understanding',
+# 'Wong2020Fast']
 # todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
 
 advx_fname = lambda model_name: f'advx_WB_{model_name}.gz'
@@ -39,8 +63,11 @@ NFLIPS_FNAME = 'neg_flips_table.csv'
 OVERALL_RES_FNAME = 'overall_results_table.csv'
 
 ADVX_DIRNAME_DEFAULT = 'advx'
+custom_dirname = lambda dirname, ft_models=False, tr_set=False: f"{dirname}{'_ft' if ft_models else ''}{'_trset' if tr_set else ''}"
 PREDS_DIRNAME_DEFAULT = 'predictions'
-RESULTS_DIRNAME_DEFAULT = 'results_backup'
+RESULTS_DIRNAME_DEFAULT = 'results'
+FINETUNING_DIRNAME_DEFAULT = 'finetuned_models'
+FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
@@ -51,34 +78,54 @@ def set_all_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-
-def model_name_to_M_i(model_names):
-    mi_list = []
-    mi_dict = {}
-    for i, m in enumerate(model_names):
-        s = f"M{i + 1}"
-        mi_list.append(s)
-        mi_dict[m] = s
-    return mi_list, mi_dict
+# Default
+# def parse_args():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('-seed', default=0, type=int)
+#     parser.add_argument('-n_examples', default=20, type=int)
+#     parser.add_argument('-n_tr_examples', default=20, type=int)
+#     parser.add_argument('-eps', default=0.03, type=float)
+#     parser.add_argument('-n_steps', default=5,  type=int)
+#     parser.add_argument('-n_models', default=5, type=int)
+#     parser.add_argument('-batch_size', default=5, type=int)
+#     parser.add_argument('-root', default='data', type=str)
+#     parser.add_argument('-exp_name', default='exp', type=str)
+#     parser.add_argument('-exp_ft_name', default='exp_ft', type=str)
+#     parser.add_argument('-cuda_id', default=0, type=int)
+#     # Finetuning parameters
+#     parser.add_argument('-lr', default=1e-1, type=float)
+#     parser.add_argument('-epochs', default=10, type=int)
+#     parser.add_argument('-gamma1', default=1, type=float)
+#     parser.add_argument('-gamma2', default=0, type=float)
+#     args = parser.parse_args()
+#     return args
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-seed', default=0, type=int)
-    parser.add_argument('-n_examples', default=5, type=int)
-    parser.add_argument('-eps', default=0.1, type=float)
-    parser.add_argument('-n_steps', default=10,  type=int)
-    parser.add_argument('-n_models', default=10, type=int)
-    parser.add_argument('-batch_size', default=2, type=int)
+    parser.add_argument('-n_examples', default=200, type=int)
+    parser.add_argument('-n_tr_examples', default=500, type=int)
+    parser.add_argument('-eps', default=0.03, type=float)
+    parser.add_argument('-n_steps', default=250,  type=int)
+    parser.add_argument('-n_models', default=11, type=int)
+    parser.add_argument('-batch_size', default=100, type=int)
     parser.add_argument('-root', default='data', type=str)
     parser.add_argument('-exp_name', default='exp', type=str)
+    parser.add_argument('-exp_ft_name', default='exp_ft', type=str)
+    parser.add_argument('-cuda_id', default=0, type=int)
+    # Finetuning parameters
+    parser.add_argument('-lr', default=1e-1, type=float)
+    parser.add_argument('-epochs', default=100, type=int)
+    parser.add_argument('-gamma1', default=1, type=float)
+    parser.add_argument('-gamma2', default=0, type=float)
     args = parser.parse_args()
     return args
 
-def init_logger(root):
-    logger = logging.getLogger('progress')
+def init_logger(root, fname='progress'):
+    logger = logging.getLogger(fname)
     logger.setLevel(logging.DEBUG)
 
-    fh = logging.FileHandler(fm.join(root, 'progress.log'))
+    fh = logging.FileHandler(fm.join(root, f'{fname}.log'))
     # formatter_file = logging.Formatter('%(asctime)s - %(message)s')
     formatter = logging.Formatter('[%(asctime)s] %(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
                                   '%m-%d %H:%M:%S')
@@ -90,10 +137,45 @@ def init_logger(root):
     logger.addHandler(streamhandler)
     return logger
 
-def save_params(local_items, dirname):
+def save_params(local_items, dirname, fname):
     s = ''
     for k, v in local_items:
         s += f"{k}: {v}\n"
 
-    with open(fm.join(dirname, "info.txt"), 'w') as f:
+    with open(fm.join(dirname, f"{fname}.txt"), 'w') as f:
         f.write(s)
+
+
+
+def load_train_set(
+        n_examples: Optional[int] = None,
+        data_dir: str = './data') -> Tuple[torch.Tensor, torch.Tensor]:
+    
+    transform = transforms.Compose(
+        [transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+    trainset = datasets.CIFAR10(root=data_dir,
+                            train=True,
+                            transform=transform,
+                            download=True)
+
+    batch_size = 100
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                          shuffle=False, num_workers=0)
+
+
+    x_tr, y_tr = [], []
+    for i, (x, y) in enumerate(train_loader):
+        x_tr.append(x)
+        y_tr.append(y)
+        if n_examples is not None and batch_size * i >= n_examples:
+            break
+    x_tr_tensor = torch.cat(x_tr)
+    y_tr_tensor = torch.cat(y_tr)
+
+    if n_examples is not None:
+        x_tr_tensor = x_tr_tensor[:n_examples]
+        y_tr_tensor = y_tr_tensor[:n_examples]
+
+    return x_tr_tensor, y_tr_tensor

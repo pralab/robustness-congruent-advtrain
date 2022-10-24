@@ -2,20 +2,28 @@ import torch
 import math
 import pandas as pd
 
-def predict(model, x, batch_size, device):
+def predict(model, x, batch_size, device, logger=None):
     preds = []
+    outputs = []
     n_examples = x.shape[0]
-    x.to(device)
+    x = x.to(device)
     model.to(device)
+
+    num_batches = math.ceil(n_examples / batch_size)
     with torch.no_grad():
-        for batch_i in range(math.ceil(n_examples / batch_size)):
+        for batch_i in range(num_batches):
+            if logger is not None:
+                logger.debug(f"{batch_i + 1}/{num_batches}")
             start_i = batch_i * batch_size
             end_i = start_i + batch_size
 
             out = model(x[start_i:end_i])
+            outputs.append(out)
             pred = torch.argmax(out, axis=1)
             preds.extend(pred.tolist())
-    return preds
+    outputs = torch.cat(outputs)
+
+    return preds, outputs
 
 def compute_nflips(old_preds, new_preds, y):
     df = pd.concat({'y': y,
