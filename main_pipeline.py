@@ -4,7 +4,7 @@ import torch
 from robustbench.data import load_cifar10
 from generate_advx import generate_advx
 from save_predictions import save_predictions
-from evaluate import evaluate_pipeline
+from evaluate import evaluate_pipeline, matrix_churn
 from utils.utils import parse_args
 from datetime import datetime
 import logging
@@ -57,6 +57,9 @@ model_names = MODEL_NAMES   #[:N_MODELS]
 #                  device=DEVICE, logger=logger)
 
 evaluate_pipeline(model_names=model_names,
+                  exp_folder_name=EXP_FOLDER_NAME, logger=logger)
+
+matrix_churn(model_names=model_names,
                   exp_folder_name=EXP_FOLDER_NAME, logger=logger)
 print("")
 

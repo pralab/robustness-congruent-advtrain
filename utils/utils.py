@@ -26,8 +26,9 @@ from secml.utils import fm
 MODEL_NAMES = ['Standard', 'Engstrom2019Robustness', 'Rice2020Overfitting',
        'Zhang2020Attacks', 'Hendrycks2019Using',
        'Rade2021Helper_R18_ddpm', 'Addepalli2021Towards_WRN34',
-       'Carmon2019Unlabeled', 'Gowal2020Uncovering_70_16_extra',
-       'Gowal2021Improving_70_16_ddpm_100m', 'Kang2021Stable']
+       'Carmon2019Unlabeled', 'Kang2021Stable',
+       'Gowal2020Uncovering_70_16_extra',
+       'Gowal2021Improving_70_16_ddpm_100m']
 
 # todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
 
@@ -39,7 +40,7 @@ OVERALL_RES_FNAME = 'overall_results_table.csv'
 
 ADVX_DIRNAME_DEFAULT = 'advx'
 PREDS_DIRNAME_DEFAULT = 'predictions'
-RESULTS_DIRNAME_DEFAULT = 'results'
+RESULTS_DIRNAME_DEFAULT = 'results_backup'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
@@ -50,6 +51,15 @@ def set_all_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+
+def model_name_to_M_i(model_names):
+    mi_list = []
+    mi_dict = {}
+    for i, m in enumerate(model_names):
+        s = f"M{i + 1}"
+        mi_list.append(s)
+        mi_dict[m] = s
+    return mi_list, mi_dict
 
 def parse_args():
     parser = argparse.ArgumentParser()
