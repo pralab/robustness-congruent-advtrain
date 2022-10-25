@@ -1,37 +1,116 @@
 import torch
 import math
 import pandas as pd
+from tqdm import tqdm
 
-def predict(model, x, batch_size, device, logger=None):
+
+# def predict(model, x, batch_size, device, logger=None):
+#     preds = []
+#     outputs = []
+#     n_examples = x.shape[0]
+#     x = x.to(device)
+#     model.to(device)
+
+#     num_batches = math.ceil(n_examples / batch_size)
+#     with torch.no_grad():
+#         for batch_i in range(num_batches):
+#             if logger is not None:
+#                 logger.debug(f"{batch_i + 1}/{num_batches}")
+#             start_i = batch_i * batch_size
+#             end_i = start_i + batch_size
+
+#             out = model(x[start_i:end_i])
+#             outputs.append(out)
+#             pred = torch.argmax(out, axis=1)
+#             preds.extend(pred.tolist())
+#     outputs = torch.cat(outputs)
+
+#     return preds, outputs
+
+def correct_predictions(model, test_loader, device):
+    model = model.to(device)
+    model.eval()
     preds = []
-    outputs = []
-    n_examples = x.shape[0]
-    x = x.to(device)
-    model.to(device)
-
-    num_batches = math.ceil(n_examples / batch_size)
     with torch.no_grad():
-        for batch_i in range(num_batches):
-            if logger is not None:
-                logger.debug(f"{batch_i + 1}/{num_batches}")
-            start_i = batch_i * batch_size
-            end_i = start_i + batch_size
+        with tqdm(total=len(test_loader)) as t:
+            for batch_idx, (data, target) in enumerate(test_loader):
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                pred = torch.argmax(output, dim=1)  # get the index of the max log-probability
+                preds.append(pred==target)
+                t.set_postfix(
+                    completed='[{}/{} ({:.0f}%)]'.format(
+                        batch_idx * len(data),
+                        len(test_loader.dataset),
+                        100. * batch_idx / len(test_loader)))
+                t.update()
+    preds = torch.cat(preds)
+    return preds
 
-            out = model(x[start_i:end_i])
-            outputs.append(out)
-            pred = torch.argmax(out, axis=1)
-            preds.extend(pred.tolist())
+
+def get_ds_outputs(model, ds_loader, device):
+    model = model.to(device)
+    model.eval()
+    outputs = []
+    with torch.no_grad():
+        with tqdm(total=len(ds_loader)) as t:
+            for batch_idx, (data, target) in enumerate(ds_loader):
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                outputs.append(output)
+                t.set_postfix(
+                    completed='[{}/{} ({:.0f}%)]'.format(
+                        batch_idx * len(data),
+                        len(ds_loader.dataset),
+                        100. * batch_idx / len(ds_loader)))
+                t.update()
     outputs = torch.cat(outputs)
+    return outputs
 
-    return preds, outputs
 
-def compute_nflips(old_preds, new_preds, y):
-    df = pd.concat({'y': y,
-                    'old': old_preds,
-                    'new': new_preds}, axis=1)
-    nf_idxs = (old_preds != new_preds) & (old_preds == y)
+# def compute_nflips(old_preds, new_preds, y):
+#     nf_idxs = (old_preds != new_preds) & (old_preds == y)
+#     return nf_idxs.mean()
 
-    return nf_idxs.mean()
+def compute_nflips(old_preds, new_preds, indexes=False):
+    old_preds = pd.Series(old_preds.cpu().tolist())
+    new_preds = pd.Series(new_preds.cpu().tolist())
+    nf_idxs = (old_preds & (~new_preds))
+    return nf_idxs if indexes else nf_idxs.mean()
+
+def compute_pflips(old_preds, new_preds, indexes=False):
+    old_preds = pd.Series(old_preds.cpu().tolist())
+    new_preds = pd.Series(new_preds.cpu().tolist())
+    pf_idxs = ((~old_preds) & new_preds)
+    return pf_idxs if indexes else pf_idxs.mean()
+
+def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
+    model = model.to(device)
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        with tqdm(total=len(test_loader)) as t:
+            for batch_idx, (data, target) in enumerate(test_loader):
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                if loss_fn is not None:
+                    loss = loss_fn(output, target)
+                    test_loss += loss.item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+                t.set_postfix(
+                    epoch='{}'.format(epoch),
+                    completed='[{}/{} ({:.0f}%)]'.format(
+                        batch_idx * len(data),
+                        len(test_loader.dataset),
+                        100. * batch_idx / len(test_loader)))
+                    # loss='{:.4f}'.format(loss.item()))
+                t.update()
+
+        test_loss /= len(test_loader.dataset)
+    return correct / len(test_loader.dataset)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 .idea/
 /models/
 /churnenv/
+/images/
 /data/
 __pycache__
 *.out
