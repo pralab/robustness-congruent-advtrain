@@ -71,14 +71,15 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
     if ax is None:
         fig, ax = plt.subplots()
         title = ('Decision Regions')
-    ax.contourf(xx, yy, Z.cpu(), cmap=plt.cm.coolwarm, alpha=0.2)
+    ax.contourf(xx, yy, Z.cpu(), cmap=plt.cm.coolwarm, alpha=0.1)
     if flipped_samples is None:
         ax.scatter(samples.cpu().numpy()[:, 0], samples.numpy()[:, 1],
-                    c=targets.cpu().int().numpy(), cmap=plt.cm.coolwarm, s=20, edgecolors='k')
+                   c=targets.cpu().int().numpy(), alpha=0.7,
+                   cmap=plt.cm.coolwarm, s=20, edgecolors='k')
     else:
         alpha_idx = flipped_samples*1
-        alpha_idx[~flipped_samples] = 0.6
-        s_idx = flipped_samples*50
+        alpha_idx[~flipped_samples] = 0.3
+        s_idx = flipped_samples*60
         s_idx[~flipped_samples] = 20
         # MLIST = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X']
         # marker_fun = lambda idx: MLIST[idx]
