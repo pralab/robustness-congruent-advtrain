@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 
-def main(model_class, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
+def main(model_class, centers, cluster_std=1, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
          lr=1e-3, ft_lr=1e-3, alpha=1,
          beta=5, eval_trainset=True, fname='decision_regions'):
 
@@ -47,33 +47,35 @@ def main(model_class, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         n_features = 2  # number of features
-        centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
-        # centers = np.array([[0, 0], [0, 2], [-1, -1], [1, -1]])  # centers of the clusters
-        centers = centers*2
+
         n_points_per_dim = 1e5
 
         n_samples = n_samples_per_class_i * len(centers)  # number of samples
-        cluster_std = 1  # standard deviation of the clusters
 
+
+        train_ds = {}
+        X_tr, Y_tr = {}, {}
+        tr_loader = {}
         # Prepare data
-        train_ds = CDLRandomBlobs(n_features=n_features,
-                                centers=centers,
-                                cluster_std=cluster_std,
-                                n_samples=n_samples,
-                                random_state=random_state).load()
+        for ds in ['old', 'new']:
+            train_ds[ds] = CDLRandomBlobs(n_features=n_features,
+                                    centers=centers,
+                                    cluster_std=cluster_std,
+                                    n_samples=n_samples,
+                                    random_state=random_state).load()
 
-        X_tr = torch.Tensor(train_ds.X.tolist())
-        Y_tr = torch.Tensor(train_ds.Y.tolist())
-        train_ds = TensorDataset(X_tr, Y_tr)
-        tr_loader = DataLoader(train_ds, batch_size=10, shuffle=False)
+            X_tr[ds] = torch.Tensor(train_ds[ds].X.tolist())
+            Y_tr[ds] = torch.Tensor(train_ds[ds].Y.tolist())
+            train_ds[ds] = TensorDataset(X_tr[ds], Y_tr[ds])
+            tr_loader[ds] = DataLoader(train_ds[ds], batch_size=10, shuffle=False)
 
         old_model = model_class(input_size=n_features, output_size=len(centers))
         optimizer = torch.optim.SGD(old_model.parameters(), lr=lr, momentum=0.9)
         loss_fn = nn.CrossEntropyLoss()
 
         if eval_trainset:
-            ds_loader = tr_loader
-            X, Y = X_tr, Y_tr
+            ds_loader = tr_loader['new']
+            X, Y = X_tr['new'], Y_tr['new']
         else:
             test_ds = CDLRandomBlobs(n_features=n_features,
                                       centers=centers,
@@ -94,19 +96,19 @@ def main(model_class, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
 
         # Training baseline model from skratch
         for epoch in range(n_epochs):
-            train_epoch(model=old_model, device=device, train_loader=tr_loader,
+            train_epoch(model=old_model, device=device, train_loader=tr_loader['old'],
                         optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
 
         old_correct = correct_predictions(old_model, ds_loader, device)
         old_acc = old_correct.numpy().mean()
 
         # Standard Finetuning
-        set_all_seed(random_state)
+        set_all_seed(random_state+4)
         new_model = model_class(input_size=n_features, output_size=len(centers))
-        new_model.load_state_dict(old_model.state_dict())
+        #new_model.load_state_dict(old_model.state_dict())
         optimizer = torch.optim.SGD(new_model.parameters(), lr=ft_lr, momentum=0.9)
-        for epoch in range(n_ft_epochs):
-            train_epoch(model=new_model, device=device, train_loader=tr_loader,
+        for epoch in range(n_epochs):
+            train_epoch(model=new_model, device=device, train_loader=tr_loader['new'],
                         optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
         new_correct = correct_predictions(new_model, ds_loader, device)
         nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
@@ -135,10 +137,11 @@ def main(model_class, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
             pct_model = model_class(input_size=n_features, output_size=len(centers))
             pct_model.load_state_dict(new_model.state_dict())
             optimizer = torch.optim.SGD(pct_model.parameters(), lr=ft_lr, momentum=0.9)
-            old_outputs = get_ds_outputs(old_model, tr_loader, device)
+            old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
             loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
             for epoch in range(n_ft_epochs):
-                pc_train_epoch(pct_model, device, tr_loader, optimizer, epoch, loss_fn)
+                pc_train_epoch(pct_model, device, tr_loader['new'],
+                               optimizer, epoch, loss_fn)
 
             pct_correct = correct_predictions(pct_model, ds_loader, device)
             pct_nf_idxs = compute_nflips(old_correct, pct_correct, indexes=True)
@@ -168,7 +171,7 @@ def main(model_class, n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
 
 
     # fig.suptitle(title)
-    fig.savefig(f'images/{fname}.pdf')
+    #fig.savefig(f'images/{fname}.pdf')
     fig.show()
 
     print("")
@@ -200,18 +203,24 @@ class MyLinear(nn.Module):
         return x
 
 if __name__ == '__main__':
-    alpha = [0.1, 0.5, 1]
-    beta = [1, 2, 5]
+
+    centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
+    #centers = np.array([[1, -1], [-1, -1]])
+    cluster_std = 0.5  # standard deviation of the clusters
+
+    alpha = [0.1]
+    beta = [1]
     lr = 1e-3
     ft_lr = 1e-3
-    n_epochs = 5
+    n_epochs = 10
     n_ft_epochs = 5
-    n = [100, 500, 1000]
+    n = [100]
     eval_trainset = False
 
-    for model_class in [MyLinear, MLP]:
+    for model_class in [MLP]:
         model_name = 'linear' if model_class is MyLinear else 'mlp'
-        main(model_class=model_class, n_samples_per_class=n,
+        main(model_class=model_class, centers=centers,
+             cluster_std=cluster_std, n_samples_per_class=n,
              n_epochs=n_epochs, n_ft_epochs=n_ft_epochs,
              lr=lr, ft_lr=ft_lr, alpha=alpha, beta=beta,
              eval_trainset=eval_trainset,
