@@ -32,3 +32,50 @@ class PCTLoss(Module):
         loss = loss_ce + self.gamma1*loss_pc
 
         return loss, loss_ce, loss_pc
+
+
+
+class MixedPCTLoss(Module):
+    def __init__(self, output1, output2,
+                 gamma1=1, alpha1=0, beta1=1):
+        super(MixedPCTLoss, self).__init__()
+        self.output1 = output1
+        self.output2 = output2
+        self.gamma1 = gamma1
+        self.alpha1 = alpha1
+        self.beta1 = beta1
+
+        self.ce = CrossEntropyLoss()
+
+    def forward(self, model_output: Tensor, target: Tensor,
+                batch_idx: int, batch_size: int, curr_batch_dim: int) -> Tensor:
+        # Compute CE loss for general improvement
+        loss_ce = self.ce(model_output, target.long())
+
+        outs1 = self.output1[batch_idx * batch_size:batch_idx * batch_size + curr_batch_dim]
+        preds1 = torch.argmax(outs1, dim=1)
+        correct1 = (preds1 == target)
+        outs2 = self.output2[batch_idx * batch_size:batch_idx * batch_size + curr_batch_dim]
+        preds2 = torch.argmax(outs2, dim=1)
+        correct2 = (preds2 == target)
+
+        # weight both NF and PF
+        preds_to_keep = preds1.logical_or(preds2)
+
+        outs = outs1.clone()
+        # where new model gets right, distill its decision function
+        outs[correct2] = outs2[correct2]
+        outs[()]
+
+        # todo: qui si possono fare cose più sofisticate
+
+        # apply a weighting for each training sample based on old model outputs
+        f_pc = (self.alpha1 + self.beta1 * (preds_to_keep.type(loss_ce.dtype)))
+        D_pc = torch.mean((model_output - outs1).pow(2), dim=1) / 2
+
+        loss_pc = torch.mean(f_pc * D_pc)
+
+        # # combine CE loss and PCT loss
+        loss = loss_ce + self.gamma1 * loss_pc
+
+        return loss, loss_ce, loss_pc

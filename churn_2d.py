@@ -9,16 +9,16 @@ from utils.trainer import train_epoch, pc_train_epoch
 import matplotlib.pyplot as plt
 import numpy as np
 from utils.visualization import my_plot_decision_regions
-from utils.utils import set_all_seed
+from utils.utils import set_all_seed, rotate
 from utils.eval import get_ds_outputs, evaluate_acc, compute_nflips, compute_pflips, correct_predictions
-from utils.custom_loss import PCTLoss
+from utils.custom_loss import PCTLoss, MixedPCTLoss
 
 from torch.utils.data import DataLoader, TensorDataset
 
 
 
-def main(model_class, centers, cluster_std=1., n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
-         batch_size=1, lr=1e-3, ft_lr=1e-3, alpha=1,
+def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100, n_epochs=5, n_ft_epochs=5,
+         batch_size=1, lr=1e-3, ft_lr=1e-3, mixed_loss=False, alpha=1,
          beta=5, eval_trainset=True, diff_model_init=False, diff_trset_init=False,
          fname=None, random_state=999):
 
@@ -74,16 +74,19 @@ def main(model_class, centers, cluster_std=1., n_samples_per_class=100, n_epochs
 
         n_samples = n_samples_per_class_i * len(centers)  # number of samples
 
+        ###################################
+        # DATA PREPARATION
+        ###################################
 
         train_ds = {}
         X_tr, Y_tr = {}, {}
         tr_loader = {}
-        # Prepare data
         for ds_i, ds in enumerate(['old', 'new']):
             random_state_trsets = random_state + 1 + ds_i \
                 if diff_trset_init_i else random_state + 1
+            theta_i = theta if ds_i == 0 else -theta
             train_ds[ds] = CDLRandomBlobs(n_features=n_features,
-                                    centers=centers,
+                                    centers=rotate(centers, theta_i),
                                     cluster_std=cluster_std,
                                     n_samples=n_samples,
                                     random_state=random_state_trsets).load()
@@ -182,8 +185,14 @@ def main(model_class, centers, cluster_std=1., n_samples_per_class=100, n_epochs
             pct_model = model_class(input_size=n_features, output_size=len(centers))
             pct_model.load_state_dict(new_model.state_dict())
             optimizer = torch.optim.SGD(pct_model.parameters(), lr=ft_lr, momentum=0.9)
+
+            # old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
+            # loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+
             old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-            loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+            new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
+            loss_fn = MixedPCTLoss(old_outputs, new_outputs, alpha1=alpha_j, beta1=beta_j)
+
             for epoch in range(n_ft_epochs):
                 pc_train_epoch(pct_model, device, tr_loader['new'],
                                optimizer, epoch, loss_fn)
@@ -273,24 +282,25 @@ if __name__ == '__main__':
     beta = [1, 2, 5]
     lr = 1e-3
     ft_lr = 1e-3
-    n_epochs = 100 #10
-    n_ft_epochs = 50
-    batch_size = 1
-    n = [5] #50
-    eval_trainset = True
+    n_epochs = 10 #10
+    n_ft_epochs = 5
+    batch_size = 10
+    n = [100] #50
+    eval_trainset = False
     diff_model_init = [False]#, True]
     diff_trset_init = [True]#, False]
     model_class = MyLinear
+    theta = 5
 
     model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-    fname = None #'churn_plot_50samples'
+    fname = None #'churn_plot_rotation_drift'
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
 
 
     main(model_class=model_class, centers=centers,
-         cluster_std=cluster_std, n_samples_per_class=n,
+         cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
          n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
          lr=lr, ft_lr=ft_lr, alpha=alpha, beta=beta,
          eval_trainset=eval_trainset,

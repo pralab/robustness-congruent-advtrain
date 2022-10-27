@@ -68,6 +68,14 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
     preds = outs.argmax(axis=1)
     Z = preds.reshape(xx.shape)
 
+    # COLOR_LIST = ['r', 'g', 'y', 'b', 'c'] #todo: se idx eccede lista problem
+    # color_fun = lambda idx: COLOR_LIST[idx]
+    # tz = Z.numpy().astype(int)
+    # color_regions_idxs = list(map(color_fun, tz))
+    # ts = list(targets.numpy().astype(int))
+    # color_samples_idxs = list(map(color_fun, ts))
+
+
     if ax is None:
         fig, ax = plt.subplots()
         title = ('Decision Regions')
@@ -81,11 +89,6 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
         alpha_idx[~flipped_samples] = 0.3
         s_idx = flipped_samples*60
         s_idx[~flipped_samples] = 20
-        # MLIST = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X']
-        # marker_fun = lambda idx: MLIST[idx]
-        # t = list(targets.numpy().astype(int))
-        # marker_idx = list(map(marker_fun, t))
-        # marker_idx = targets.numpy()
         x_list = samples.cpu().numpy()[:, 0]
         y_list = samples.numpy()[:, 1]
         c_list = targets.cpu().int().numpy()

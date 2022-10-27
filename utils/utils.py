@@ -179,3 +179,18 @@ def load_train_set(
         y_tr_tensor = y_tr_tensor[:n_examples]
 
     return x_tr_tensor, y_tr_tensor
+
+def rotate(x, theta):
+    theta = np.radians(theta)
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+    x_rot = R.dot(x.T).T
+
+    # import matplotlib.pyplot as plt
+    #
+    # fig, ax = plt.subplots()
+    # ax.scatter(x[:, 0], x[:, 1])
+    #
+    # ax.scatter(x_rot[:, 0], x_rot[:, 1])
+    # fig.show()
+    return x_rot
