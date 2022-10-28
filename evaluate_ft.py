@@ -68,4 +68,36 @@ print("")
 
 
 
+# from utils.visualization import show_loss_from_csv_to_filefig
+
+# debug_path = fm.join(EXP_FOLDER_NAME, 'debug_loss')
+# if not fm.folder_exist(debug_path):
+#     fm.make_folder(debug_path)
+
+# for dirname in fm.listdir(EXP_FT_FOLDER_NAME):
+#     exp_ft_path = fm.join(EXP_FT_FOLDER_NAME, dirname)
+#     gamma1 = exp_ft_path.split('gamma1-')[1].split('_day')[0]
+#     fm.copy_folder(fm.join(exp_ft_path, 'ft_debug'), fm.join(debug_path, f"{gamma1}"))
+#     print("")
+#     # show_loss_from_csv_to_filefig()
+
+
+
+
+# questa run serve contro i modelli finetunati, per valutare robustezza
+# logger_ft_res.info("Generating ADVX")
+# generate_advx(x=x_test, y=y_test, batch_size=BATCH_SIZE,
+#               model_names=model_names,
+#               eps=EPSILON, n_steps=N_STEPS,
+#               exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft_res, device=DEVICE, ft_models=True)
+
+# logger_ft_res.info("Computing predictions")
+# save_predictions(model_names=model_names, x_test=x_test, y_test=y_test,
+#                  batch_size=BATCH_SIZE, exp_folder_name=EXP_FT_FOLDER_NAME,
+#                  device=DEVICE, logger=logger_ft_res, ft_models=True)
+
+# logger_ft_res.info("Evaluations")
+# evaluate_pipeline(model_names=model_names,
+#                     exp_folder_name=EXP_FT_FOLDER_NAME, logger=logger_ft_res, ft_models=True)
+
 print("")

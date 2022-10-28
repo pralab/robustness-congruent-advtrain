@@ -27,7 +27,7 @@ from tqdm import tqdm
 
 #     return preds, outputs
 
-def correct_predictions(model, test_loader, device,):
+def correct_predictions(model, test_loader, device):
     model = model.to(device)
     model.eval()
     preds = []
@@ -72,11 +72,45 @@ def get_ds_outputs(model, ds_loader, device):
 #     nf_idxs = (old_preds != new_preds) & (old_preds == y)
 #     return nf_idxs.mean()
 
-def compute_nflips(old_preds, new_preds):
+def compute_nflips(old_preds, new_preds, indexes=False):
     old_preds = pd.Series(old_preds.cpu().tolist())
     new_preds = pd.Series(new_preds.cpu().tolist())
     nf_idxs = (old_preds & (~new_preds))
-    return nf_idxs.mean()
+    return nf_idxs if indexes else nf_idxs.mean()
+
+def compute_pflips(old_preds, new_preds, indexes=False):
+    old_preds = pd.Series(old_preds.cpu().tolist())
+    new_preds = pd.Series(new_preds.cpu().tolist())
+    pf_idxs = ((~old_preds) & new_preds)
+    return pf_idxs if indexes else pf_idxs.mean()
+
+def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
+    model = model.to(device)
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        with tqdm(total=len(test_loader)) as t:
+            for batch_idx, (data, target) in enumerate(test_loader):
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                if loss_fn is not None:
+                    loss = loss_fn(output, target)
+                    test_loss += loss.item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+                t.set_postfix(
+                    epoch='{}'.format(epoch),
+                    completed='[{}/{} ({:.0f}%)]'.format(
+                        batch_idx * len(data),
+                        len(test_loader.dataset),
+                        100. * batch_idx / len(test_loader)))
+                    # loss='{:.4f}'.format(loss.item()))
+                t.update()
+
+        test_loss /= len(test_loader.dataset)
+    return correct / len(test_loader.dataset)
 
 
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):

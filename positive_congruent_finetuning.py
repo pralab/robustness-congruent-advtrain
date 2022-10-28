@@ -14,7 +14,7 @@ import pickle
 from utils.eval import predict
 from adv_lib.attacks.auto_pgd import apgd
 
-from utils.visualization import show_loss
+from utils.visualization import show_loss_from_csv_to_filefig
 
 def finetuning_pipeline(model_names, 
                     x_train, y_train,
@@ -179,10 +179,10 @@ def finetuning(model_id,
     csv_path = fm.join(ft_debug_folder, f"{model_name}.csv")
     fig_path = fm.join(ft_debug_folder, f"{model_name}.pdf")
     debug_df.to_csv(csv_path)
-    show_loss(csv_path, fig_path)
+    show_loss_from_csv_to_filefig(csv_path, fig_path)
 
 
-    # show_loss(ft_debug_folder, model_name)
+    # show_loss_from_csv_to_filefig(ft_debug_folder, model_name)
     # preds_orig = predict(old_model, x_test, batch_size, device)
     # model2 = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
     # preds_new = predict(model2, x_test, batch_size, device)

@@ -35,8 +35,6 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
     model.train()
     batch_size = train_loader.batch_size
 
-    ce_cumul = []
-    pc_cumul = []
     with tqdm(total=len(train_loader)) as t:
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)

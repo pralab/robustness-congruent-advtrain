@@ -4,79 +4,266 @@ from secml.ml.classifiers import CClassifierPyTorch
 from secml.figure import CFigure
 from torch import nn
 import torch
-from utils.trainer import train_epoch
+from utils.trainer import train_epoch, pc_train_epoch
 import matplotlib.pyplot as plt
 import numpy as np
-from utils.visualization import my_plot_decision_regions
-from utils.utils import set_all_seed
+from utils.visualization import my_plot_decision_regions, plot_loss
+from utils.utils import set_all_seed, rotate
+from utils.eval import get_ds_outputs, evaluate_acc, compute_nflips, compute_pflips, correct_predictions
+from utils.custom_loss import MyCrossEntropyLoss, PCTLoss, MixedPCTLoss
+from utils.models_simple import MyLinear, MLP
 
 from torch.utils.data import DataLoader, TensorDataset
 
 
+def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100,
+         n_epochs=5, n_ft_epochs=5, batch_size=1, lr=1e-3, ft_lr=1e-3,
+         mixed_loss=False, only_nf=False, alpha=1, beta=5, eval_trainset=True,
+         diff_model_init=False, diff_trset_init=False,
+         show_losses=False,
+         fname=None, random_state=999):
 
-def main():
-    random_state = 999
+    if not isinstance(alpha, list):
+        alpha = [alpha]
+    if not isinstance(beta, list):
+        beta = [beta]
+
+    assert len(alpha) == len(beta)
+
+    lsel = 2 if show_losses else 1
+
+    n_plot_x = 3 * lsel    #len(diff_trset_init) * 2     # include loss plots
+    n_plot_y = 2 + len(alpha)
+    fig, ax = plt.subplots(n_plot_x, n_plot_y,
+                           figsize=(n_plot_y*5, n_plot_x*5),
+                           squeeze=False)
+
     set_all_seed(random_state)
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     n_features = 2  # number of features
-    centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
-    centers = centers*2
-    
-    n_samples = 100 * len(centers)  # number of samples
-    cluster_std = 0.8  # standard deviation of the clusters
 
-    train_ds = CDLRandomBlobs(n_features=n_features,
-                            centers=centers,
-                            cluster_std=cluster_std,
-                            n_samples=n_samples,
-                            random_state=random_state).load()
+    n_points_per_dim = 1e5
 
-    X = torch.Tensor(train_ds.X.tolist())
-    Y = torch.Tensor(train_ds.Y.tolist())
-    train_ds = TensorDataset(X, Y)
-    tr_loader = DataLoader(train_ds, batch_size=10, shuffle=False)
+    n_samples = n_samples_per_class * len(centers)  # number of samples
 
+    ###################################
+    # DATA PREPARATION
+    ###################################
 
-    old_model = Net(input_size=n_features, output_size=len(centers))
-    optimizer = torch.optim.SGD(old_model.parameters(), lr=0.001, momentum=0.9)
-    loss_fn = nn.CrossEntropyLoss()
+    train_ds = {}
+    X_tr, Y_tr = {}, {}
+    tr_loader = {}
+    for ds_i, ds in enumerate(['old', 'new']):
+        random_state_trsets = random_state + 1 + ds_i \
+            if diff_trset_init else random_state + 1
+        theta_i = theta if ds_i == 0 else -theta
+        train_ds[ds] = CDLRandomBlobs(n_features=n_features,
+                                centers=rotate(centers, theta_i),
+                                cluster_std=cluster_std,
+                                n_samples=n_samples,
+                                random_state=random_state_trsets).load()
 
- 
-    for epoch in range(1):
-        train_epoch(model=old_model, device='cuda:0', train_loader=tr_loader,
-                    optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
-    
-    new_model = Net(input_size=n_features, output_size=len(centers))
-    new_model.load_state_dict(old_model.state_dict())
-    for epoch in range(3):
-        train_epoch(model=new_model, device='cuda:0', train_loader=tr_loader,
-                    optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
+        X_tr[ds] = torch.Tensor(train_ds[ds].X.tolist())
+        Y_tr[ds] = torch.Tensor(train_ds[ds].Y.tolist())
+        train_ds[ds] = TensorDataset(X_tr[ds], Y_tr[ds])
+        tr_loader[ds] = DataLoader(train_ds[ds], batch_size=batch_size, shuffle=False)
 
-
-
-    fname ='decision_regions_best'
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    title = ('Decision Regions')
-    my_plot_decision_regions(old_model, X, Y, ax[0], n_grid_points=1000)
-    my_plot_decision_regions(new_model, X, Y, ax[1], n_grid_points=1000)
-    ax[0].set_title('Old model')
-    ax[1].set_title('New model')
-    fig.suptitle('Decision regions')
-    plt.savefig(f'images/{fname}.png')
+    if eval_trainset:
+        ds_loader = tr_loader['new']
+        X, Y = X_tr['new'], Y_tr['new']
+    else:
+        test_ds = CDLRandomBlobs(n_features=n_features,
+                                  centers=centers,
+                                  cluster_std=cluster_std,
+                                  n_samples=n_samples,
+                                  random_state=random_state).load()
+        X_ts = torch.Tensor(test_ds.X.tolist())
+        Y_ts = torch.Tensor(test_ds.Y.tolist())
+        test_ds = TensorDataset(X_ts, Y_ts)
+        ts_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+        ds_loader = ts_loader
+        X, Y = X_ts, Y_ts
 
 
-class Net(nn.Module):
-    """Model with input size (-1, 28, 28) for MNIST 10-classes dataset."""
+    ###################################
+    # TRAINING
+    ###################################
 
-    def __init__(self, input_size=2, output_size=3):
-        super(Net, self).__init__()
-        self.fc = nn.Linear(input_size, output_size)
+    # Training baseline model from skratch
+    random_state_model = random_state
+    set_all_seed(random_state_model)
+    old_model = model_class(input_size=n_features, output_size=len(centers))
+    old_optimizer = torch.optim.SGD(old_model.parameters(), lr=lr, momentum=0.9)
+    old_loss_fn = MyCrossEntropyLoss()
+    set_all_seed(random_state_model)
+    for epoch in range(n_epochs):
+        train_epoch(model=old_model, device=device, train_loader=tr_loader['old'],
+                    optimizer=old_optimizer, epoch=epoch, loss_fn=old_loss_fn)
 
-    def forward(self, x):
-        x = self.fc(x)
-        return x
+    old_correct = correct_predictions(old_model, ds_loader, device)
+    old_acc = old_correct.numpy().mean()
+
+    # Standard Finetuning
+    random_state_model = random_state + 1 if diff_model_init \
+        else random_state
+    set_all_seed(random_state_model)
+    new_model = model_class(input_size=n_features, output_size=len(centers))
+    new_loss_fn = MyCrossEntropyLoss()
+    #new_model.load_state_dict(old_model.state_dict())
+    new_optimizer = torch.optim.SGD(new_model.parameters(), lr=ft_lr, momentum=0.9)
+    for epoch in range(n_epochs):
+        train_epoch(model=new_model, device=device, train_loader=tr_loader['new'],
+                    optimizer=new_optimizer, epoch=epoch, loss_fn=new_loss_fn)
+    new_correct = correct_predictions(new_model, ds_loader, device)
+    nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
+    pf_idxs = compute_pflips(old_correct, new_correct, indexes=True)
+    new_acc = new_correct.numpy().mean()
+    diff_acc = new_acc - old_acc
+    pfr = pf_idxs.mean()
+    nfr = nf_idxs.mean()
+    idxs = nf_idxs
+
+    for i, (mixed_loss, only_nf) in enumerate([[False, None],
+                                              [True, False],
+                                               [True, True]]):
+        if mixed_loss:
+            if only_nf:
+                ylabel = 'Mix MSE Loss (NF)'
+            else:
+                ylabel = 'Mix MSE Loss'
+        else:
+            ylabel = 'PCT Loss'
+
+        ax[lsel * i, 0].set_ylabel(ylabel)
+        # Plot testing set  and NFs withing decision regions
+        my_plot_decision_regions(old_model, X, Y, device, idxs, ax[lsel * i, 0],
+                                 n_grid_points=n_points_per_dim)
+        ax[lsel * i, 0].set_xlabel(f"Acc: {old_acc*100:.2f}%")
 
 
+
+        my_plot_decision_regions(new_model, X, Y, device, idxs, ax[lsel * i, 1],
+                                 n_grid_points=n_points_per_dim)
+        ax[2 * i, 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%"
+                                f"({'+' if diff_acc >= 0 else ''}{diff_acc * 100:.2f}%)\n"
+                                f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%), "
+                                f"PF: {pf_idxs.sum()} ({pfr * 100:.2f}%)")
+        if show_losses:
+            plot_loss(old_loss_fn.loss_path, ax=ax[lsel * i + 1, 0])
+            plot_loss(new_loss_fn.loss_path, ax=ax[lsel * i + 1, 1])
+
+
+        random_state_model = random_state + 2 if diff_model_init \
+            else random_state
+        for j, (alpha_j, beta_j) in enumerate(list(zip(alpha, beta))):
+            # PCT Finetuning
+            set_all_seed(random_state_model)
+            pct_model = model_class(input_size=n_features, output_size=len(centers))
+            pct_model.load_state_dict(new_model.state_dict())
+            pct_optimizer = torch.optim.SGD(pct_model.parameters(), lr=ft_lr, momentum=0.9)
+
+            if not mixed_loss:
+                old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
+                pct_loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+            else:
+                old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
+                new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
+                pct_loss_fn = MixedPCTLoss(old_outputs, new_outputs,
+                                           alpha1=alpha_j, beta1=beta_j,
+                                           only_nf=only_nf)
+
+            for epoch in range(n_ft_epochs):
+                pc_train_epoch(pct_model, device, tr_loader['new'],
+                               pct_optimizer, epoch, pct_loss_fn)
+
+            pct_correct = correct_predictions(pct_model, ds_loader, device)
+            pct_nf_idxs = compute_nflips(old_correct, pct_correct, indexes=True)
+            pct_pf_idxs = compute_pflips(old_correct, pct_correct, indexes=True)
+            pct_acc = pct_correct.numpy().mean()
+            pct_diff_acc = pct_acc - old_acc
+            pct_pfr = pct_pf_idxs.mean()
+            pct_nfr = pct_nf_idxs.mean()
+            # pct_idxs = nf_idxs if pct_nfr < nfr else pct_nf_idxs
+            pct_idxs = pct_nf_idxs
+            my_plot_decision_regions(model=pct_model, samples=X, targets=Y,
+                                     device=device, flipped_samples=pct_idxs,
+                                     ax=ax[lsel * i, j + 2],
+                                     n_grid_points=n_points_per_dim)
+            ax[lsel * i, j + 2].set_xlabel(f"Acc: {pct_acc * 100:.2f}%"
+                                   f"({'+' if pct_diff_acc>=0 else ''}{pct_diff_acc * 100:.2f}%)\n"
+                                   f"NF: {pct_nf_idxs.sum()} ({pct_nfr * 100:.2f}%), "
+                                   f"PF: {pct_pf_idxs.sum()} ({pct_pfr * 100:.2f}%)")
+            if show_losses:
+                plot_loss(pct_loss_fn.loss_path, ax=ax[lsel * i + 1, j + 2])
+
+
+
+    for j in range(n_plot_y):
+        if j == 0:
+            ax[0, j].set_title('Old model')
+        elif j == 1:
+            ax[0, j].set_title('New model')
+        else:
+            if mixed_loss:
+                ax[0, j].set_title(f"MixMSE finetuned model\n"
+                                   f"beta={beta[j-2]}")
+            else:
+                ax[0, j].set_title(f"PCT finetuned model\n"
+                                   f"(alpha={alpha[j - 2]}, beta={beta[j - 2]})")
+
+
+    # fig.suptitle(title)
+    if fname is not None:
+        fig.savefig(f'images/{fname}.pdf')
+    fig.show()
+    # fig_tr.show()
+
+    print("")
 
 if __name__ == '__main__':
-    main()
+    random_state = 999
+
+    centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
+    #centers = np.array([[1, -1], [-1, -1]])
+    cluster_std = 0.6  # standard deviation of the clusters
+
+    alpha = [0.1, 0.5, 1]
+    beta = [1, 2, 5, 10]
+    alpha = beta
+
+
+    lr = 1e-3
+    ft_lr = 1e-3
+    n_epochs = 10
+    n_ft_epochs = 10
+    batch_size = 10
+    n = 50
+
+    mixed_loss = True
+    only_nf = True
+
+    eval_trainset = False
+    diff_model_init = True
+    diff_trset_init = False
+    show_losses = True
+    model_class = MyLinear
+    theta = 0
+
+    model_name = 'linear' if model_class is MyLinear else 'mlp'
+
+    fname = None #'churn_plot_rotation_drift'
+    #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
+
+    main(model_class=model_class, centers=centers,
+         cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
+         n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
+         lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss, only_nf=only_nf,
+         alpha=alpha, beta=beta,
+         eval_trainset=eval_trainset,
+         diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+         show_losses=show_losses,
+         fname=fname, random_state=random_state)
+
+    print("")
