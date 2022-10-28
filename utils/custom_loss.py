@@ -55,27 +55,31 @@ class MixedPCTLoss(Module):
         outs1 = self.output1[batch_idx * batch_size:batch_idx * batch_size + curr_batch_dim]
         preds1 = torch.argmax(outs1, dim=1)
         correct1 = (preds1 == target)
+
         outs2 = self.output2[batch_idx * batch_size:batch_idx * batch_size + curr_batch_dim]
         preds2 = torch.argmax(outs2, dim=1)
         correct2 = (preds2 == target)
 
         # weight both NF and PF
-        preds_to_keep = preds1.logical_or(preds2)
+        #preds_to_keep = correct1.logical_or(correct2)
 
-        outs = outs1.clone()
+        #outs = outs2.clone()
         # where new model gets right, distill its decision function
-        outs[correct2] = outs2[correct2]
-        outs[()]
+        #outs[correct1] = outs1[correct1]
 
-        # todo: qui si possono fare cose più sofisticate
-
+        loss_pc = None
         # apply a weighting for each training sample based on old model outputs
-        f_pc = (self.alpha1 + self.beta1 * (preds_to_keep.type(loss_ce.dtype)))
+        f_pc = (self.alpha1 + self.beta1 * (correct1.type(loss_ce.dtype)))
         D_pc = torch.mean((model_output - outs1).pow(2), dim=1) / 2
+        loss_pc1 = torch.mean(f_pc * D_pc)
 
-        loss_pc = torch.mean(f_pc * D_pc)
+        #f_pc = ((correct2.type(loss_ce.dtype)))
+        D_pc = torch.mean((model_output - outs2).pow(2), dim=1) / 2
+        loss_pc2 = torch.mean(D_pc)
 
         # # combine CE loss and PCT loss
-        loss = loss_ce + self.gamma1 * loss_pc
+        #loss = loss_ce + self.gamma1 * loss_pc
 
-        return loss, loss_ce, loss_pc
+        loss = loss_pc1 + loss_pc2
+
+        return loss, loss_ce, loss_pc1

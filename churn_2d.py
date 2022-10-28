@@ -186,12 +186,13 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
             pct_model.load_state_dict(new_model.state_dict())
             optimizer = torch.optim.SGD(pct_model.parameters(), lr=ft_lr, momentum=0.9)
 
-            # old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-            # loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
-
-            old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-            new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
-            loss_fn = MixedPCTLoss(old_outputs, new_outputs, alpha1=alpha_j, beta1=beta_j)
+            if not mixed_loss:
+                old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
+                loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+            else:
+                old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
+                new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
+                loss_fn = MixedPCTLoss(old_outputs, new_outputs, alpha1=alpha_j, beta1=beta_j)
 
             for epoch in range(n_ft_epochs):
                 pc_train_epoch(pct_model, device, tr_loader['new'],
@@ -259,12 +260,13 @@ if __name__ == '__main__':
     n_epochs = 10 #10
     n_ft_epochs = 5
     batch_size = 10
-    n = [100] #50
+    n = [50] #50
     eval_trainset = False
-    diff_model_init = [False]#, True]
+    mixed_loss = True
+    diff_model_init = [True]#, True]
     diff_trset_init = [True]#, False]
-    model_class = MyLinear
-    theta = 5
+    model_class = MLP
+    theta = 0
 
     model_name = 'linear' if model_class is MyLinear else 'mlp'
 
@@ -272,11 +274,14 @@ if __name__ == '__main__':
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
 
-    main(model_class=model_class, centers=centers,
-         cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
-         n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
-         lr=lr, ft_lr=ft_lr, alpha=alpha, beta=beta,
-         eval_trainset=eval_trainset,
-         diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-         fname=fname, random_state=random_state)
+    for mixed_loss in [False, True]:
+        #fname=f"churn_plot_mixed-{mixed_loss}"
+        main(model_class=model_class, centers=centers,
+             cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
+             n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
+             lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss,
+             alpha=alpha, beta=beta,
+             eval_trainset=eval_trainset,
+             diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+             fname=fname, random_state=random_state)
     print("")
