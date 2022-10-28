@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from secml.utils import fm
 import os
 import pandas as pd
+import seaborn as sns
 import torch
 import math
 
@@ -42,8 +43,7 @@ def show_batch(x, transforms=None, figsize=(10, 20)):
     plt.axis('off')
     plt.show()
 
-
-def show_loss(csv_path, fig_path):
+def show_loss_from_csv_to_filefig(csv_path, fig_path):
     df = pd.read_csv(csv_path, index_col='epoch')
     df.plot(kind='line')
     plt.savefig(fig_path)
@@ -109,3 +109,13 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
         plt.savefig(f'images/{fname}.png')
     # plt.show()
 
+
+def plot_loss(loss, ax, window=20):
+    loss_df = pd.DataFrame(loss)
+
+    if isinstance(window, int):
+        loss_df = loss_df.rolling(window).mean()
+
+    loss_df.plot(ax=ax)
+    ax.legend(fontsize=15)
+    ax.set_xlabel('iterations')

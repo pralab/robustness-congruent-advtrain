@@ -74,7 +74,7 @@ print("")
 
 
 
-# from utils.visualization import show_loss
+# from utils.visualization import show_loss_from_csv_to_filefig
 
 # debug_path = fm.join(EXP_FOLDER_NAME, 'debug_loss')
 # if not fm.folder_exist(debug_path):
@@ -85,7 +85,7 @@ print("")
 #     gamma1 = exp_ft_path.split('gamma1-')[1].split('_day')[0]
 #     fm.copy_folder(fm.join(exp_ft_path, 'ft_debug'), fm.join(debug_path, f"{gamma1}"))
 #     print("")
-#     # show_loss()
+#     # show_loss_from_csv_to_filefig()
 
 
 
