@@ -3,7 +3,6 @@ from secml.ml.features import CNormalizerMinMax
 from secml.ml.classifiers import CClassifierPyTorch
 from secml.figure import CFigure
 from torch import nn
-import torch.nn.functional as F
 import torch
 from utils.trainer import train_epoch, pc_train_epoch
 import matplotlib.pyplot as plt
@@ -12,6 +11,7 @@ from utils.visualization import my_plot_decision_regions
 from utils.utils import set_all_seed, rotate
 from utils.eval import get_ds_outputs, evaluate_acc, compute_nflips, compute_pflips, correct_predictions
 from utils.custom_loss import PCTLoss, MixedPCTLoss
+from utils.models_simple import MyLinear, MLP
 
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -245,32 +245,6 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
     print("")
 
-class MLP(nn.Module):
-    """Model with input size (-1, 28, 28) for MNIST 10-classes dataset."""
-
-    def __init__(self, input_size=2, output_size=3, hidden_units=10):
-        super(MLP, self).__init__()
-        self.hidden = nn.Linear(input_size, hidden_units)
-        self.fc = nn.Linear(hidden_units, output_size)
-
-    def forward(self, x):
-        x = self.hidden(x)
-        x = F.relu(x)
-        x = self.fc(x)
-        return x
-
-class MyLinear(nn.Module):
-    """Model with input size (-1, 28, 28) for MNIST 10-classes dataset."""
-
-
-    def __init__(self, input_size=2, output_size=3):
-        super(MyLinear, self).__init__()
-        self.fc = nn.Linear(input_size, output_size)
-
-    def forward(self, x):
-        x = self.fc(x)
-        return x
-
 if __name__ == '__main__':
     random_state = 998
 
@@ -296,7 +270,6 @@ if __name__ == '__main__':
 
     fname = None #'churn_plot_rotation_drift'
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
-
 
 
     main(model_class=model_class, centers=centers,
