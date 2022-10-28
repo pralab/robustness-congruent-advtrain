@@ -103,7 +103,7 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
                     optimizer=old_optimizer, epoch=epoch, loss_fn=old_loss_fn)
 
     old_correct = correct_predictions(old_model, ds_loader, device)
-    old_acc = old_correct.numpy().mean()
+    old_acc = old_correct.cpu().numpy().mean()
 
     # Standard Finetuning
     random_state_model = random_state + 1 if diff_model_init \
@@ -119,7 +119,7 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
     new_correct = correct_predictions(new_model, ds_loader, device)
     nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
     pf_idxs = compute_pflips(old_correct, new_correct, indexes=True)
-    new_acc = new_correct.numpy().mean()
+    new_acc = new_correct.cpu().numpy().mean()
     diff_acc = new_acc - old_acc
     pfr = pf_idxs.mean()
     nfr = nf_idxs.mean()
@@ -181,7 +181,7 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
             pct_correct = correct_predictions(pct_model, ds_loader, device)
             pct_nf_idxs = compute_nflips(old_correct, pct_correct, indexes=True)
             pct_pf_idxs = compute_pflips(old_correct, pct_correct, indexes=True)
-            pct_acc = pct_correct.numpy().mean()
+            pct_acc = pct_correct.cpu().numpy().mean()
             pct_diff_acc = pct_acc - old_acc
             pct_pfr = pct_pf_idxs.mean()
             pct_nfr = pct_nf_idxs.mean()
@@ -253,7 +253,7 @@ if __name__ == '__main__':
 
     model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-    fname = None #'churn_plot_rotation_drift'
+    fname = 'complete_plot' #'churn_plot_rotation_drift'
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
     main(model_class=model_class, centers=centers,
