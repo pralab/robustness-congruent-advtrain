@@ -30,50 +30,50 @@ class MyTensorDataset(Dataset):
             x = self.transforms(x)
         return x, y
 
-def get_dataset_from_file(ds_name,
-    root='data/2ksample_250steps_100batchsize_bancoprova/advx_trset'):
-    """
-    Ora come ora è una porcheria ma questo deve pigliarmi il dataset di advx
-    """
+# def get_dataset_from_file(ds_name,
+#     root='data/2ksample_250steps_100batchsize_bancoprova/advx_trset'):
+#     """
+#     Ora come ora è una porcheria ma questo deve pigliarmi il dataset di advx
+#     """
     
-    model_name = ds_name
-    ds_name = f"advx_WB_{ds_name}"
+#     model_name = ds_name
+#     ds_name = f"advx_WB_{ds_name}"
 
-    dir_name = os.path.join(root, ds_name)
+#     dir_name = os.path.join(root, ds_name)
 
-    with open(f"{dir_name}.gz", 'rb') as f:
-        data = pickle.load(f)
+#     with open(f"{dir_name}.gz", 'rb') as f:
+#         data = pickle.load(f)
 
-    norm = Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    inv_norm = InvNormalize(norm)
-    base_ds = get_cifar10_dataset()
-    x0 = base_ds[2][0][None, :]
-    y0 = torch.Tensor([base_ds[2][1]])
+#     norm = Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+#     inv_norm = InvNormalize(norm)
+#     base_ds = get_cifar10_dataset()
+#     x0 = base_ds[2][0][None, :]
+#     y0 = torch.Tensor([base_ds[2][1]])
 
-    from torch.utils.data import DataLoader
-    dataloader = DataLoader(base_ds, batch_size=1)
-    data = iter(dataloader).next()
-    x0,y0 = data[0], data[1]
+#     from torch.utils.data import DataLoader
+#     dataloader = DataLoader(base_ds, batch_size=1)
+#     data = iter(dataloader).next()
+#     x0,y0 = data[0], data[1]
 
-    model=load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
-    # model.cuda()
+#     model=load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+#     # model.cuda()
 
-    eps=0.03
-    n_iter=250
-    xadv = apgd(model, inputs=x0, 
-            labels=y0, eps=eps, norm=float('inf'), n_iter=n_iter)
+#     eps=0.03
+#     n_iter=250
+#     xadv = apgd(model, inputs=x0, 
+#             labels=y0, eps=eps, norm=float('inf'), n_iter=n_iter)
 
-    for i, img in enumerate([x0[0], xadv[0]]):
-        imshow(img, path=f'images/{i}.png')
+#     for i, img in enumerate([x0[0], xadv[0]]):
+#         imshow(img, path=f'images/{i}.png')
 
-    if not os.path.isdir(dir_name):
-        os.mkdir(dir_name)
+#     if not os.path.isdir(dir_name):
+#         os.mkdir(dir_name)
 
-    for i, x in enumerate(data):
-        file_path = os.path.join(dir_name, f"{str(i).zfill(10)}.gz")
-        with open(file_path, 'wb') as f:
-            pickle.dump(x, f)
-    print("")
+#     for i, x in enumerate(data):
+#         file_path = os.path.join(dir_name, f"{str(i).zfill(10)}.gz")
+#         with open(file_path, 'wb') as f:
+#             pickle.dump(x, f)
+#     print("")
 
 
 def get_cifar10_dataset(data_dir='datasets/Cifar10', train=True, 
@@ -101,6 +101,7 @@ def get_cifar10_dataset(data_dir='datasets/Cifar10', train=True,
     return dataset
 
 
+
 def get_mnist_dataset(data_dir='datasets/MNIST', train=True, 
                         shuffle=False, num_samples=None,
                         normalize=False, download=True):
@@ -124,6 +125,8 @@ def get_mnist_dataset(data_dir='datasets/MNIST', train=True,
     dataset = torch.utils.data.Subset(dataset, indexes)
 
     return dataset
+
+
 
 def split_train_valid(dataset, train_size=0.8):
     if train_size is None:

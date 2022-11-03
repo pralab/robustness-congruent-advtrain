@@ -20,8 +20,8 @@ def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, devi
     pfr = pf_idxs.mean()
     nfr = nf_idxs.mean()
 
-    results = {'old_correct': old_correct,
-                'new_correct': new_correct,
+    results = {'old_correct': old_correct.cpu(),
+                'new_correct': new_correct.cpu(),
                 'old_acc': old_acc,
                 'new_acc': new_acc,
                 'diff_acc': diff_acc,
