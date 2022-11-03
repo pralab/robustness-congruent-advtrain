@@ -97,9 +97,15 @@ def train_pct_model(model, old_model,
         # # il secondo causa errore di scrittura file!!!
         # if nfr < best_nfr:
         #     torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
-    
-    # torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
-    torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"last.pt"))
+    model_data = {
+        'epoch': e,
+        'model_state_dict': model.cpu().state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss_fn,
+        'perf': {'acc': acc, 'nfr': nfr, 'pfr': pfr}
+        }
+    torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
+    # torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"last.pt"))
 
 
 
@@ -116,8 +122,9 @@ def print_perf(s0, oldacc, newacc, nfr, pfr):
 
 
 
+
 if __name__ == '__main__':
-    device = torch.device("cuda:1" if torch.cuda.is_available()
+    device = torch.device("cuda" if torch.cuda.is_available()
                 else "cpu")
 
     random_seed=0
@@ -153,8 +160,8 @@ if __name__ == '__main__':
         # PREPARE DATA
         #####################################
         train_dataset, val_dataset = split_train_valid(
-            get_cifar10_dataset(train=True, shuffle=False, num_samples=1000), train_size=0.8)
-        test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=500)
+            get_cifar10_dataset(train=True, shuffle=False, num_samples=5000), train_size=0.8)
+        test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=2000)
         # shuffle può essere messo a True se si valuta il vecchio modello 
         # on the fly senza usare output precalcolati
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
@@ -177,15 +184,7 @@ if __name__ == '__main__':
             base_results['nfr'], base_results['pfr']))
 
         for i, loss_name in enumerate(['PCT', 'MixMSE', 'MixMSE(NF)']):
-            # if i==0:
-            #     loss_fn = PCTLoss
-            # elif i==1:
-            #     loss_fn = MixedPCTLoss
-            #     only_nf = False
-            # else:
-            #     loss_fn = MixedPCTLoss
-            #     only_nf = True
-            
+           
             exp_dir1 = os.path.join(exp_dir, loss_name)
 
             for alpha, beta in list(zip(alphas, betas)):
