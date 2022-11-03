@@ -3,29 +3,35 @@ import math
 import pandas as pd
 from tqdm import tqdm
 
+def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, device=None):
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available()
+                else "cpu")
+    
+    if old_correct is None:
+        old_correct = correct_predictions(old_model, ds_loader, device)
+    old_acc = old_correct.cpu().numpy().mean()
 
-# def predict(model, x, batch_size, device, logger=None):
-#     preds = []
-#     outputs = []
-#     n_examples = x.shape[0]
-#     x = x.to(device)
-#     model.to(device)
+    new_correct = correct_predictions(new_model, ds_loader, device)
+    nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
+    pf_idxs = compute_pflips(old_correct, new_correct, indexes=True)
+    new_acc = new_correct.cpu().numpy().mean()
+    diff_acc = new_acc - old_acc
+    pfr = pf_idxs.mean()
+    nfr = nf_idxs.mean()
 
-#     num_batches = math.ceil(n_examples / batch_size)
-#     with torch.no_grad():
-#         for batch_i in range(num_batches):
-#             if logger is not None:
-#                 logger.debug(f"{batch_i + 1}/{num_batches}")
-#             start_i = batch_i * batch_size
-#             end_i = start_i + batch_size
+    results = {'old_correct': old_correct,
+                'new_correct': new_correct,
+                'old_acc': old_acc,
+                'new_acc': new_acc,
+                'diff_acc': diff_acc,
+                'pfr': pfr,
+                'nfr': nfr,
+                'nf_idxs': nf_idxs,
+                'pf_idxs': pf_idxs
+                }
 
-#             out = model(x[start_i:end_i])
-#             outputs.append(out)
-#             pred = torch.argmax(out, axis=1)
-#             preds.extend(pred.tolist())
-#     outputs = torch.cat(outputs)
-
-#     return preds, outputs
+    return results
 
 def correct_predictions(model, test_loader, device):
     model = model.to(device)

@@ -13,18 +13,32 @@ import torchvision.transforms as transforms
 # ordinati dalla leaderboard su github (a fine pagina)
 
 
-MODEL_NAMES = ['Standard', #81
-'Engstrom2019Robustness', #53
-'Rice2020Overfitting', #44
-'Zhang2020Attacks', #43
-'Rade2021Helper_R18_ddpm', #30
-'Addepalli2021Towards_WRN34', #25
-'Carmon2019Unlabeled', #23
-'Hendrycks2019Using', #18
-'Kang2021Stable', #6
-'Gowal2020Uncovering_70_16_extra', #3
-'Gowal2021Improving_70_16_ddpm_100m' #2
+MODEL_NAMES = ['Standard',
+'Engstrom2019Robustness',
+'Rice2020Overfitting',
+'Zhang2020Attacks',
+'Hendrycks2019Using',
+'Rade2021Helper_R18_ddpm',
+'Addepalli2021Towards_WRN34',
+'Carmon2019Unlabeled',
+'Kang2021Stable',
+'Gowal2020Uncovering_70_16_extra',
+'Gowal2021Improving_70_16_ddpm_100m'
 ]
+
+
+# MODEL_NAMES = ['Standard', #81
+# 'Engstrom2019Robustness', #53
+# 'Rice2020Overfitting', #44
+# 'Zhang2020Attacks', #43
+# 'Rade2021Helper_R18_ddpm', #30
+# 'Addepalli2021Towards_WRN34', #25
+# 'Carmon2019Unlabeled', #23
+# 'Hendrycks2019Using', #18
+# 'Kang2021Stable', #6
+# 'Gowal2020Uncovering_70_16_extra', #3
+# 'Gowal2021Improving_70_16_ddpm_100m' #2
+# ]
 
 # MODEL_NAMES = ['Addepalli2021Towards_WRN34',
 # 'Chan2020Jacobian',
