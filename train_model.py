@@ -19,10 +19,10 @@ import pickle
 import matplotlib.pyplot as plt
 
 
-def train_pct_model(model, old_model, 
+def train_pct_model(model, old_model,
                     train_loader, val_loader,
-                    epochs, loss_fn, lr, random_seed, device,
-                    alpha, beta, exp_dir, only_nf=False,
+                    epochs, loss_fn, lr, random_seed, device, 
+                    alpha, beta, exp_dir, trainable_layers=None,
                     logger=None):
 
     set_all_seed(random_seed)
@@ -59,7 +59,8 @@ def train_pct_model(model, old_model,
                                 alpha1=alpha, beta1=beta,
                                 only_nf=True)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    # freeze_network(model)
+    if trainable_layers is not None:
+        freeze_network(model, n_layer=trainable_layers)
 
     checkpoints_dir = os.path.join(exp_dir, 'checkpoints')
     if not os.path.isdir(checkpoints_dir):
@@ -83,29 +84,22 @@ def train_pct_model(model, old_model,
                 f"NFR: {nfr*100:.3f}%, "\
                 f"PFR: {pfr*100:.3f}%")
 
-        # model_data = {
-        #     'epoch': e,
-        #     'model_state_dict': model.cpu().state_dict(),
-        #     'optimizer_state_dict': optimizer.state_dict(),
-        #     'loss': loss_fn,
-        #     'perf': {'acc': acc, 'nfr': nfr, 'pfr': pfr}
-        #     }
+        model_data = {
+            'epoch': e,
+            'model_state_dict': model.cpu().state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': loss_fn,
+            'perf': {'acc': acc, 'nfr': nfr, 'pfr': pfr}
+            }
 
-        # if acc > best_acc:
-        #     torch.save(model_data, os.path.join(checkpoints_dir, f"best_acc.pt"))
+        if acc > best_acc:
+            torch.save(model_data, os.path.join(checkpoints_dir, f"best_acc.pt"))
         
-        # # il secondo causa errore di scrittura file!!!
-        # if nfr < best_nfr:
-        #     torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
-    model_data = {
-        'epoch': e,
-        'model_state_dict': model.cpu().state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss_fn,
-        'perf': {'acc': acc, 'nfr': nfr, 'pfr': pfr}
-        }
+        # il secondo causa errore di scrittura file!!!
+        if nfr < best_nfr:
+            torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
+
     torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
-    # torch.save(model.state_dict(), os.path.join(checkpoints_dir, f"last.pt"))
 
 
 
@@ -124,99 +118,126 @@ def print_perf(s0, oldacc, newacc, nfr, pfr):
 
 
 if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available()
+    device = torch.device("cuda:1" if torch.cuda.is_available()
                 else "cpu")
 
     random_seed=0
-    model_id=5
-    old_model_id=4
+    old_model_ids=[3,4,5,6,7,8]
+    # specify number of last layers to train, the others will be freezed, train all if None
+    trainable_layers = None 
+    n_tr = None
+    n_ts = None
     epochs=1
-    batch_size=50
+    batch_size=1000
     lr=1e-3
+    betas = [1, 2, 5, 10, 100]
+    alphas = [1, 1, 1, 1, 1]
+    tr_model_sel = 'last'   # last, best_acc, best_nfr
+    exp_name = f'all_trsets_lotofmodels'
+
+
     root = 'results'
+    date = datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")
+    exp_path = os.path.join(root, f"{date}_{exp_name}")
 
-    if not os.path.isdir(root):
-        os.mkdir(root)
+    if not os.path.isdir(exp_path):
+        os.mkdir(exp_path)
 
-    save_params(locals().items(), root, 'info')
+    save_params(locals().items(), exp_path, 'info')
 
-    for old_model_id in [1, 2, 3]:
+    logger = init_logger(exp_path)
+
+    #####################################
+    # PREPARE DATA
+    #####################################
+    train_dataset, val_dataset = split_train_valid(
+        get_cifar10_dataset(train=True, shuffle=False, num_samples=n_tr), train_size=0.8)
+    test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=n_ts)
+    # shuffle può essere messo a True se si valuta il vecchio modello 
+    # on the fly senza usare output precalcolati
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    for old_model_id in old_model_ids:       
+
         model_id = old_model_id + 1
-        # exp_dir = f'{datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")}_old-{old_model_id}_new-model_id'
-        exp_dir = f"old-{old_model_id}_new-{model_id}"
-        exp_dir = os.path.join(root, exp_dir)
-        if not os.path.isdir(exp_dir):
-            os.mkdir(exp_dir)
+        model_pair_dir = f"old-{old_model_id}_new-{model_id}"
+        model_pair_path = os.path.join(exp_path, model_pair_dir)
+        if not os.path.isdir(model_pair_path):
+            os.mkdir(model_pair_path)
 
-        logger = init_logger(exp_dir)
+        logger.info(f"------- MODELS {old_model_id}- -------")
+        try:
+            #####################################
+            # GET MODELS
+            #####################################
+            old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf')
+            model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
 
-        betas = [1, 2, 5]
-        alphas = [0]*len(betas)
-        only_nf = True
-
-
-
-        #####################################
-        # PREPARE DATA
-        #####################################
-        train_dataset, val_dataset = split_train_valid(
-            get_cifar10_dataset(train=True, shuffle=False, num_samples=5000), train_size=0.8)
-        test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=2000)
-        # shuffle può essere messo a True se si valuta il vecchio modello 
-        # on the fly senza usare output precalcolati
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-        #####################################
-        # GET MODELS
-        #####################################
-        old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf')
-        model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
-
-        base_results = get_pct_results(new_model=model, ds_loader=test_loader, 
-                                        old_model=old_model,
-                                        device=device)
-        old_correct = base_results['old_correct']
-
-        logger.info(print_perf("\n>>> Starting test perf \n",
-            base_results['old_acc'], base_results['new_acc'], 
-            base_results['nfr'], base_results['pfr']))
-
-        for i, loss_name in enumerate(['PCT', 'MixMSE', 'MixMSE(NF)']):
-           
-            exp_dir1 = os.path.join(exp_dir, loss_name)
-
-            for alpha, beta in list(zip(alphas, betas)):
-                exp_dir2 = os.path.join(exp_dir1, f"a-{alpha}_b-{beta}")
-                if not os.path.isdir(exp_dir2):
-                    os.makedirs(exp_dir2)
-                
-                logger.info(f"------- Alpha {alpha}, Beta: {beta} -------")
-                #####################################
-                # TRAIN POSITIVE CONGRUENT
-                #####################################
-                model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
-                train_pct_model(model=model, old_model=old_model,
-                                train_loader=train_loader, val_loader=val_loader,
-                                epochs=epochs, loss_fn=loss_name, lr=lr, random_seed=random_seed, device=device,
-                                alpha=alpha, beta=beta, only_nf=only_nf,
-                                logger=logger, exp_dir=exp_dir2)
-                
-                #####################################
-                # SAVE RESULTS
-                #####################################
-                model_fname = os.path.join(exp_dir2, 'checkpoints', 'last.pt')
-                checkpoint = torch.load(model_fname)
-                model.load_state_dict(checkpoint['model_state_dict'])
-                
-                results = get_pct_results(new_model=model, ds_loader=test_loader, 
-                                            old_correct=old_correct,
+            logger.debug('Get baseline results')
+            base_results = get_pct_results(new_model=model, ds_loader=test_loader, 
+                                            old_model=old_model,
                                             device=device)
-                results['loss'] = checkpoint['loss'].loss_path
-                results['orig_acc'] = base_results['new_acc']
-                results['orig_nfr'] = base_results['nfr']
-                results['orig_pfr'] = base_results['pfr']
+            old_correct = base_results['old_correct']
 
-                with open(os.path.join(exp_dir2, 'results.gz'), 'wb') as f:
-                    pickle.dump(results, f)
+            logger.info(print_perf("\n>>> Starting test perf \n",
+                base_results['old_acc'], base_results['new_acc'], 
+                base_results['nfr'], base_results['pfr']))
+
+            for i, loss_name in enumerate(['PCT', 'MixMSE', 'MixMSE(NF)']):
+                logger.info(f"------- LOSS: {loss_name} --------")
+                loss_dir_path = os.path.join(model_pair_path, loss_name)
+
+                for alpha, beta in list(zip(alphas, betas)):
+                    logger.info(f">>> Alpha {alpha}, Beta: {beta}")
+                    params_dir_path = os.path.join(loss_dir_path, f"a-{alpha}_b-{beta}")
+                    if not os.path.isdir(params_dir_path):
+                        os.makedirs(params_dir_path)                    
+
+                    try:
+                        logger.debug('Start training...')
+                        #####################################
+                        # TRAIN POSITIVE CONGRUENT
+                        #####################################
+                        model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+                        train_pct_model(model=model, old_model=old_model,
+                                        train_loader=train_loader, val_loader=val_loader,
+                                        epochs=epochs, loss_fn=loss_name, lr=lr, random_seed=random_seed, device=device,
+                                        alpha=alpha, beta=beta, trainable_layers=trainable_layers,
+                                        logger=logger, exp_dir=params_dir_path)
+
+                        
+                        logger.debug('Evaluating finetuned model...')
+                        #####################################
+                        # SAVE RESULTS
+                        #####################################
+                        for tr_model_sel in ['last', 'best_acc', 'best_nfr']:
+                            model_fname = os.path.join(params_dir_path, 'checkpoints', f"{tr_model_sel}.pt")
+                            if os.path.exists(model_fname):
+                                try:
+                                    checkpoint = torch.load(model_fname)
+                                    model.load_state_dict(checkpoint['model_state_dict'])
+                                    
+                                    results = get_pct_results(new_model=model, ds_loader=test_loader, 
+                                                                old_correct=old_correct,
+                                                                device=device)
+                                    results['loss'] = checkpoint['loss'].loss_path
+                                    results['orig_acc'] = base_results['new_acc']
+                                    results['orig_nfr'] = base_results['nfr']
+                                    results['orig_pfr'] = base_results['pfr']
+
+                                    with open(os.path.join(params_dir_path, f"results_{tr_model_sel}.gz"), 'wb') as f:
+                                        pickle.dump(results, f)
+                                except Exception as e:
+                                    logger.debug(f"Evaluation failed for {tr_model_sel}")
+
+
+                    except Exception as e:
+                        logger.debug('Training failed.')
+                        logger.debug(e)
+        except Exception as e:
+            logger.debug(f"{model_pair_path} not computed.")
+            logger.debug(e)
+
+    logger.info("Pipeline completed :)")
