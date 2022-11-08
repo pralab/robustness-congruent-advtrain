@@ -146,7 +146,7 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
         my_plot_decision_regions(new_model, X, Y, device, idxs, ax[lsel * i, 1],
                                  n_grid_points=n_points_per_dim)
-        ax[2 * i, 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%"
+        ax[lsel * i, 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%"
                                 f"({'+' if diff_acc >= 0 else ''}{diff_acc * 100:.2f}%)\n"
                                 f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%), "
                                 f"PF: {pf_idxs.sum()} ({pfr * 100:.2f}%)")
@@ -199,21 +199,24 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
                 plot_loss(pct_loss_fn.loss_path, ax=ax[lsel * i + 1, j + 2])
 
 
-
-    for j in range(n_plot_y):
-        if j == 0:
-            ax[0, j].set_title('Old model')
-        elif j == 1:
-            ax[0, j].set_title('New model')
-        else:
-            if mixed_loss:
-                ax[0, j].set_title(f"MixMSE finetuned model\n"
-                                   f"beta={beta[j-2]}")
+    for i in range(n_plot_x):
+        for j in range(n_plot_y):
+            if j == 0:
+                ax[i, j].set_title('Old model')
+            elif j == 1:
+                ax[i, j].set_title('New model')
             else:
-                ax[0, j].set_title(f"PCT finetuned model\n"
-                                   f"(alpha={alpha[j - 2]}, beta={beta[j - 2]})")
+                if i == 1:
+                    ax[i, j].set_title(f"MixMSE finetuned model\n"
+                                       f"beta={beta[j-2]}")
+                elif i == 2:
+                    ax[i, j].set_title(f"MixMSE (NF) finetuned model\n"
+                                       f"beta={beta[j-2]}")
+                else:
+                    ax[i, j].set_title(f"PCT finetuned model\n"
+                                       f"(alpha={alpha[j - 2]}, beta={beta[j - 2]})")
 
-
+    fig.tight_layout()
     # fig.suptitle(title)
     if fname is not None:
         fig.savefig(f'images/{fname}.pdf')
@@ -224,46 +227,46 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
 if __name__ == '__main__':
     random_state = 999
+    for random_state in np.arange(995, 999):
+        centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
+        #centers = np.array([[1, -1], [-1, -1]])
+        cluster_std = 0.6  # standard deviation of the clusters
 
-    centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
-    #centers = np.array([[1, -1], [-1, -1]])
-    cluster_std = 0.6  # standard deviation of the clusters
-
-    alpha = [0.1, 0.5, 1]
-    beta = [1, 2, 5, 10]
-    alpha = beta
+        alpha = [0.1, 0.5, 1]
+        beta = [1, 2, 5, 10]
+        alpha = beta
 
 
-    lr = 1e-3
-    ft_lr = 1e-3
-    n_epochs = 10
-    n_ft_epochs = 10
-    batch_size = 10
-    n = 50
+        lr = 1e-3
+        ft_lr = 1e-3
+        n_epochs = 10
+        n_ft_epochs = 10
+        batch_size = 10
+        n = 100
 
-    mixed_loss = True
-    only_nf = True
+        mixed_loss = True
+        only_nf = True
 
-    eval_trainset = False
-    diff_model_init = True
-    diff_trset_init = False
-    show_losses = True
-    model_class = MyLinear
-    theta = 0
+        eval_trainset = False
+        diff_model_init = True
+        diff_trset_init = False
+        show_losses = True
+        model_class = MLP
+        theta = 0
 
-    model_name = 'linear' if model_class is MyLinear else 'mlp'
+        model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-    fname = 'complete_plot' #'churn_plot_rotation_drift'
-    #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
+        fname = f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
+        #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
-    main(model_class=model_class, centers=centers,
-         cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
-         n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
-         lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss, only_nf=only_nf,
-         alpha=alpha, beta=beta,
-         eval_trainset=eval_trainset,
-         diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-         show_losses=show_losses,
-         fname=fname, random_state=random_state)
+        main(model_class=model_class, centers=centers,
+             cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
+             n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
+             lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss, only_nf=only_nf,
+             alpha=alpha, beta=beta,
+             eval_trainset=eval_trainset,
+             diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+             show_losses=show_losses,
+             fname=fname, random_state=random_state)
 
     print("")

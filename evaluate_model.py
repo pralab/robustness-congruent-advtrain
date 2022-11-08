@@ -104,12 +104,79 @@ def plot_all_loss(root):
         print("")
 
 
+def plot_results_over_time(root):
+    df = pd.read_csv(join(root, 'all_models_results.csv'))
+
+    loss_list = df['Loss'].unique()
+    # sort_values -> NFR dal più piccolo al più grande
+    # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
+    # sort_index -> restore indexes, così ho i modelli in ordine
+    df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
+    df.drop(['Hparams'], axis=1, inplace=True)
+
+    new_cols = ['old', 'new'] + list(loss_list)
+    acc_df = pd.DataFrame(columns=new_cols)
+    nfr_df = pd.DataFrame(columns=new_cols)
+    pfr_df = pd.DataFrame(columns=new_cols)
+
+    acc_df.index.name = 'Models'
+    nfr_df.index.name = 'Models'
+    pfr_df.index.name = 'Models'
+
+    acc_df['old'] = df['Acc0'].unique()
+    acc_df['new'] = df['Acc1'].unique()
+    nfr_df['new'] = df['NFR1'].unique()
+    pfr_df['new'] = df['PFR1'].unique()
+
+
+    for loss, df_loss in df.groupby(by='Loss'):
+        acc_df[loss] = df_loss['Acc(FT)'].values
+        nfr_df[loss] = df_loss['NFR(FT)'].values
+        pfr_df[loss] = df_loss['PFR(FT)'].values
+
+    acc_df.to_csv(join(root, 'acc.csv'))
+    nfr_df.to_csv(join(root, 'nfr.csv'))
+    pfr_df.to_csv(join(root, 'pfr.csv'))
+
+
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+    for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
+        if i == 0:
+            df_i[['old', 'new']].plot(ax=ax[i], style='o--')
+        else:
+            df_i[['new']].plot(ax=ax[i], style='o--')
+        df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
+            .plot(ax=ax[i], style='o-')
+
+
+    titles = ['Accuracy', 'NFR', 'PFR']
+    titles = [f"{t} (%)" for t in titles]
+    for i in range(3):
+        ax[i].set_title(titles[i])
+        ax[i].set_xticks([0, 1, 2, 3])
+
+        if i == 0:
+            ax[i].set_ylim([77, 95])
+        elif i == 1:
+            ax[i].set_ylim([0, 7])
+        else:
+            ax[i].set_ylim([0, 12])
+
+    fig.savefig(join(root, 'perf.pdf'))
+    fig.show()
+
+
+    print("")
+
+
+
 
 if __name__ == '__main__':
 
     root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    performance_csv(root)
-    plot_all_loss(root)
+    # performance_csv(root)
+    # plot_all_loss(root)
+    plot_results_over_time(root)
 
 
 

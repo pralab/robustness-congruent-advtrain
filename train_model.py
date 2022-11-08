@@ -2,21 +2,13 @@ from utils.data import get_cifar10_dataset, split_train_valid
 from utils.utils import MODEL_NAMES, set_all_seed, init_logger, save_params
 from torch.utils.data import DataLoader
 from robustbench.utils import load_model
-from config import Config
-from torchvision import models
-from utils.trainer import train_epoch, pc_train_epoch, freeze_network, MLP
-from utils.eval import evaluate_acc, correct_predictions, get_ds_outputs, get_pct_results
-from utils.eval import compute_nflips
-from utils.custom_loss import PCTLoss, MixedPCTLoss, MyCrossEntropyLoss
-from utils.visualization import plot_loss
+from utils.trainer import pc_train_epoch, freeze_network
+from utils.eval import get_ds_outputs, get_pct_results
+from utils.custom_loss import PCTLoss, MixedPCTLoss
 import torch
-import logging
-import sys
 import os
-import numpy as np
 from datetime import datetime
 import pickle
-import matplotlib.pyplot as plt
 
 
 def train_pct_model(model, old_model,
