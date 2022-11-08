@@ -122,18 +122,19 @@ if __name__ == '__main__':
                 else "cpu")
 
     random_seed=0
-    old_model_ids=[3,4,5,6,7,8]
+    # old_model_ids=[3,4,5,6,7,8]
+    old_model_ids=[0,1,2]
     # specify number of last layers to train, the others will be freezed, train all if None
     trainable_layers = None 
     n_tr = None
     n_ts = None
-    epochs=1
-    batch_size=1000
+    epochs=12
+    batch_size=500
     lr=1e-3
     betas = [1, 2, 5, 10, 100]
     alphas = [1, 1, 1, 1, 1]
     tr_model_sel = 'last'   # last, best_acc, best_nfr
-    exp_name = f'all_trsets_lotofmodels'
+    exp_name = f"epochs-{epochs}_batchsize-{batch_size}"
 
 
     root = 'results'
