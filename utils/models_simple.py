@@ -1,5 +1,5 @@
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 
 class MLP(nn.Module):
     """Model with input size (-1, 28, 28) for MNIST 10-classes dataset."""

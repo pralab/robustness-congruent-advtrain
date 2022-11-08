@@ -7,5 +7,7 @@ results2
 datasets
 images
 logs
+code_backup
 __pycache__
 *.out
+
