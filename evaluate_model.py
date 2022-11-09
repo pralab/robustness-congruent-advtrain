@@ -13,61 +13,65 @@ def performance_csv(root):
     index_name = 'Hparams'
 
     models_dict = {}
-    # for model_pair_dir in os.listdir(root):
-    for model_pair_dir in ['old-3_new-4', 'old-4_new-5', 'old-5_new-6', 'old-6_new-7']:
-        model_pair_path = join(root, model_pair_dir)
+    for model_pair_dir in os.listdir(root):
+        if model_pair_dir.startswith('old'):
+            # for model_pair_dir in ['old-3_new-4', 'old-4_new-5', 'old-5_new-6', 'old-6_new-7']:
+            model_pair_path = join(root, model_pair_dir)
 
-        loss_dict = {}
-        if isdir(model_pair_path):            
-            for loss_exp_dir in ['PCT', 'MixMSE', 'MixMSE(NF)']:
-                loss_exp_path = join(model_pair_path, loss_exp_dir)
-                if isdir(loss_exp_path):
-                    i = 0
+            loss_dict = {}
+            if isdir(model_pair_path):            
+                for loss_exp_dir in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+                    loss_exp_path = join(model_pair_path, loss_exp_dir)
+                    if isdir(loss_exp_path):
+                        i = 0
 
-                    params_df = pd.DataFrame(columns=column_names)
-                    params_df.index.name = index_name
-                    for params_dir in os.listdir(loss_exp_path):
-                        params_path = join(loss_exp_path, params_dir)
-                        if isdir(params_path):
-                            params_name = params_dir.replace('-', '=').replace('_', ',')
-                            if loss_exp_dir.startswith('Mix'):
-                                params_name = params_name.split(',')[1]
-                            try:                           
-                                with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
-                                    results = pkl.load(f)
-                            except:
-                                with open(join(params_path, 'results_last.gz'), 'rb') as f:
-                                    results = pkl.load(f)
-                            print("")
-                            acc0 = results['old_acc']
-                            acc1 = results['orig_acc']
-                            nfr1 = results['orig_nfr']
-                            pfr1 = results['orig_pfr']
-                            acc = results['new_acc']
-                            nfr = results['nfr']
-                            pfr = results['pfr']
+                        params_df = pd.DataFrame(columns=column_names)
+                        params_df.index.name = index_name
+                        for params_dir in os.listdir(loss_exp_path):
+                            params_path = join(loss_exp_path, params_dir)
+                            if isdir(params_path):
+                                params_name = params_dir.replace('-', '=').replace('_', ',')
+                                if loss_exp_dir.startswith('Mix'):
+                                    params_name = params_name.split(',')[1]
+                                
+                                try:                           
+                                    with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
+                                        results = pkl.load(f)
+                                except:
+                                    with open(join(params_path, 'results_last.gz'), 'rb') as f:
+                                        results = pkl.load(f)
+                                
+                                acc0 = results['old_acc']
+                                acc1 = results['orig_acc']
+                                nfr1 = results['orig_nfr']
+                                pfr1 = results['orig_pfr']
+                                acc = results['new_acc']
+                                nfr = results['nfr']
+                                pfr = results['pfr']
 
-                            params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, acc, nfr, pfr]
-                            
-                            i += 1
+                                params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, acc, nfr, pfr]
 
-
-                    idxs = params_df.index
-                    bs = []
-                    for i, idx in enumerate(idxs):
-                        b = int(idx.split('b=')[1])
-                        bs.append(b)
-                    bs = np.array(bs)
-                    params_df = params_df.reindex(list(idxs[bs.argsort()]))
-                    loss_dict[loss_exp_dir] = params_df
+                                i += 1
 
 
-            model_df = pd.concat([loss_dict[k] for k in loss_dict.keys()], keys=loss_dict)
-            model_df = (model_df*100).round(3)
-            models_dict[model_pair_dir] = model_df
+                        idxs = params_df.index
+                        bs = []
+                        for i, idx in enumerate(idxs):
+                            b = int(idx.split('b=')[1])
+                            bs.append(b)
+                        bs = np.array(bs)
+                        params_df = params_df.reindex(list(idxs[bs.argsort()]))
+                        loss_dict[loss_exp_dir] = params_df
+
+
+                model_df = pd.concat([loss_dict[k] for k in loss_dict.keys()], keys=loss_dict)
+                model_df = (model_df*100).round(3)
+                models_dict[model_pair_dir] = model_df
 
     all_models_df = pd.concat([models_dict[k] for k in models_dict.keys()], keys=models_dict)
     all_models_df.index.names = ['Models ID', 'Loss', 'Hparams']
+    all_models_df.sort_index()
+    # all_models_df.sort_index(inplace=True)
     all_models_df.to_csv(join(root, f"all_models_results.csv"))
 
 
@@ -108,6 +112,7 @@ def plot_results_over_time(root):
     df = pd.read_csv(join(root, 'all_models_results.csv'))
 
     loss_list = df['Loss'].unique()
+    models_pair_list = df['Models ID'].sort_values().unique()
     # sort_values -> NFR dal più piccolo al più grande
     # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
     # sort_index -> restore indexes, così ho i modelli in ordine
@@ -123,16 +128,23 @@ def plot_results_over_time(root):
     nfr_df.index.name = 'Models'
     pfr_df.index.name = 'Models'
 
-    acc_df['old'] = df['Acc0'].unique()
-    acc_df['new'] = df['Acc1'].unique()
-    nfr_df['new'] = df['NFR1'].unique()
-    pfr_df['new'] = df['PFR1'].unique()
 
+    for model in models_pair_list:
+        acc_list = [df[df['Models ID']==model]['Acc0'].iloc[0],
+                    df[df['Models ID']==model]['Acc1'].iloc[0]]
+        nfr_list = [None,
+                    df[df['Models ID']==model]['NFR1'].iloc[0]]
+        pfr_list = [None,
+                    df[df['Models ID']==model]['PFR1'].iloc[0]]
 
-    for loss, df_loss in df.groupby(by='Loss'):
-        acc_df[loss] = df_loss['Acc(FT)'].values
-        nfr_df[loss] = df_loss['NFR(FT)'].values
-        pfr_df[loss] = df_loss['PFR(FT)'].values
+        for loss in loss_list:
+            acc_list.append(df[df['Models ID']==model][df['Loss']==loss]['Acc(FT)'].item())
+            nfr_list.append(df[df['Models ID']==model][df['Loss']==loss]['NFR(FT)'].item())
+            pfr_list.append(df[df['Models ID']==model][df['Loss']==loss]['PFR(FT)'].item())
+
+        acc_df.loc[model] = acc_list
+        nfr_df.loc[model] = nfr_list
+        pfr_df.loc[model] = pfr_list
 
     acc_df.to_csv(join(root, 'acc.csv'))
     nfr_df.to_csv(join(root, 'nfr.csv'))
@@ -153,14 +165,20 @@ def plot_results_over_time(root):
     titles = [f"{t} (%)" for t in titles]
     for i in range(3):
         ax[i].set_title(titles[i])
-        ax[i].set_xticks([0, 1, 2, 3])
+        ax[i].set_xticks(list(np.arange(acc_df.shape[0])))
 
         if i == 0:
             ax[i].set_ylim([77, 95])
         elif i == 1:
-            ax[i].set_ylim([0, 7])
+            ax[i].set_ylim([0, 13])
         else:
-            ax[i].set_ylim([0, 12])
+            ax[i].set_ylim([0, 17])
+        # if i == 0:
+        #     ax[i].set_ylim([0, 100])
+        # elif i == 1:
+        #     ax[i].set_ylim([0, 100])
+        # else:
+        #     ax[i].set_ylim([0, 100])
 
     fig.savefig(join(root, 'perf.pdf'))
     fig.show()
@@ -173,9 +191,9 @@ def plot_results_over_time(root):
 
 if __name__ == '__main__':
 
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
     root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    # performance_csv(root)
-    # plot_all_loss(root)
+    performance_csv(root)
     plot_results_over_time(root)
 
 
