@@ -136,7 +136,6 @@ def plot_results_over_time(root):
                     df[df['Models ID']==model]['NFR1'].iloc[0]]
         pfr_list = [None,
                     df[df['Models ID']==model]['PFR1'].iloc[0]]
-
         for loss in loss_list:
             acc_list.append(df[df['Models ID']==model][df['Loss']==loss]['Acc(FT)'].item())
             nfr_list.append(df[df['Models ID']==model][df['Loss']==loss]['NFR(FT)'].item())
@@ -153,19 +152,21 @@ def plot_results_over_time(root):
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
-        if i == 0:
-            df_i[['old', 'new']].plot(ax=ax[i], style='o--')
-        else:
-            df_i[['new']].plot(ax=ax[i], style='o--')
+        # if i == 0:
+        #     df_i[['old', 'new']].plot(ax=ax[i], style='o--')
+        # else:
+        df_i[['new']].plot(ax=ax[i], style='o--')
         df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
-            .plot(ax=ax[i], style='o-')
+            .plot(ax=ax[i], style='o-', rot=45)
 
 
     titles = ['Accuracy', 'NFR', 'PFR']
     titles = [f"{t} (%)" for t in titles]
     for i in range(3):
         ax[i].set_title(titles[i])
-        ax[i].set_xticks(list(np.arange(acc_df.shape[0])))
+        # ax[i].get_xaxis().set_visible(False)
+        # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
+        #                  rotation=45)
 
         if i == 0:
             ax[i].set_ylim([77, 95])
@@ -173,13 +174,8 @@ def plot_results_over_time(root):
             ax[i].set_ylim([0, 13])
         else:
             ax[i].set_ylim([0, 17])
-        # if i == 0:
-        #     ax[i].set_ylim([0, 100])
-        # elif i == 1:
-        #     ax[i].set_ylim([0, 100])
-        # else:
-        #     ax[i].set_ylim([0, 100])
 
+    fig.tight_layout()
     fig.savefig(join(root, 'perf.pdf'))
     fig.show()
 
@@ -193,7 +189,7 @@ if __name__ == '__main__':
 
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
     root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    performance_csv(root)
+    # performance_csv(root)
     plot_results_over_time(root)
 
 
