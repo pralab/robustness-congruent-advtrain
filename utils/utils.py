@@ -92,6 +92,9 @@ def set_all_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+def used_memory_percentage(device):
+    return torch.cuda.memory_allocated(device) / torch.cuda.get_device_properties(device).total_memory
+
 # Default
 # def parse_args():
 #     parser = argparse.ArgumentParser()
