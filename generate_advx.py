@@ -40,7 +40,6 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
                     100. * batch_idx / len(ds_loader)))
             t.update()
 
-            print(used_memory_percentage(device))
             for i in range(len(advx)):
                 file_path = os.path.join(ds_path, f"{str(k).zfill(10)}.gz")
                 advx = advx.detach().cpu()
@@ -167,7 +166,7 @@ if __name__ == '__main__':
         os.mkdir(advx_folder)
 
 
-    logger = init_logger(advx_folder)
+    logger = init_logger(advx_folder, fname='progress_only_preds')
     models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder)
 
 
@@ -187,12 +186,12 @@ if __name__ == '__main__':
         escape_flag = 4
         while(True):
             try:
-                ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-                ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
-                # if not os.path.exists(ds_path):
-                generate_advx_ds(model=model, ds_loader=ds_loader, 
-                                ds_path=ds_path, device=device, n_steps=n_steps)
-                logger.debug("Advx generation completed.")
+                # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+                # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+                # # if not os.path.exists(ds_path):
+                # generate_advx_ds(model=model, ds_loader=ds_loader, 
+                #                 ds_path=ds_path, device=device, n_steps=n_steps)
+                # logger.debug("Advx generation completed.")
                 # else:
                 #     logger.debug('Advx already existing')
                 
@@ -201,7 +200,7 @@ if __name__ == '__main__':
                 # if not os.path.exists(corrects_path):
                 adv_ds = MyTensorDataset(ds_path=ds_path)
                 adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
-                correct_preds = correct_predictions(model=model, test_loader=ds_loader, device=device)
+                correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
                 with open(corrects_path, 'wb') as f:
                     pickle.dump(correct_preds.cpu(), f)
                 logger.debug("Preds completed.")
@@ -233,29 +232,30 @@ if __name__ == '__main__':
     logger.info('>>> PCT Robustness')
     for i, model_info in enumerate(models_info_list):
         logger.info(f"Exp {i+1} / {len(models_info_list)} ->")
+
+        # if not os.path.exists(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz")):                
+        model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        
+        # Load finetuned model
+        model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+        checkpoint = torch.load(model_info['model_path'])
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+        ds_path = os.path.join(model_info['advx_path'], 'ts')
+        if not os.path.isdir(ds_path):
+            os.makedirs(ds_path)
         
         batch_size_temp = batch_size
         escape_flag = 5
         while(True):
             try:
-                # Reload dataset with updated batch_size
-                ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-                ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
-                # if not os.path.exists(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz")):                
-                model_name = MODEL_NAMES[model_info['robustbench_idx']]
-                
-                # Load finetuned model
-                model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
-                checkpoint = torch.load(model_info['model_path'])
-                model.load_state_dict(checkpoint['model_state_dict'])
+                # # Reload dataset with updated batch_size
+                # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+                # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
 
-                ds_path = os.path.join(model_info['advx_path'], 'ts')
-                if not os.path.isdir(ds_path):
-                    os.makedirs(ds_path)
-
-                generate_advx_ds(model=model, ds_loader=ds_loader, 
-                                ds_path=ds_path, device=device, n_steps=n_steps)
-                logger.debug("Advx generation completed.")
+                # generate_advx_ds(model=model, ds_loader=ds_loader, 
+                #                 ds_path=ds_path, device=device, n_steps=n_steps)
+                # logger.debug("Advx generation completed.")
 
 
                 adv_ds = MyTensorDataset(ds_path=ds_path)
@@ -270,7 +270,7 @@ if __name__ == '__main__':
                     new_correct = pickle.load(f)
                 
                 # Get results of model M wrt M0 and M1
-                results = get_pct_results(new_model=model, ds_loader=ds_loader, 
+                results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
                                             old_correct=old_correct,
                                             device=device)
                 # Add baseline results for comparison

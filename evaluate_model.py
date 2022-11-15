@@ -70,8 +70,8 @@ def performance_csv(root):
 
     all_models_df = pd.concat([models_dict[k] for k in models_dict.keys()], keys=models_dict)
     all_models_df.index.names = ['Models ID', 'Loss', 'Hparams']
-    all_models_df.sort_index()
-    # all_models_df.sort_index(inplace=True)
+    # all_models_df.sort_index()
+    all_models_df.sort_index(inplace=True)
     all_models_df.to_csv(join(root, f"all_models_results.csv"))
 
 
@@ -187,10 +187,13 @@ def plot_results_over_time(root):
 
 if __name__ == '__main__':
 
-    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    # performance_csv(root)
+    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    performance_csv(root)
     plot_results_over_time(root)
+
+
+    
 
 
 
