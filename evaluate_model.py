@@ -169,11 +169,11 @@ def plot_results_over_time(root):
         #                  rotation=45)
 
         if i == 0:
-            ax[i].set_ylim([77, 95])
+            ax[i].set_ylim([0, 95])
         elif i == 1:
-            ax[i].set_ylim([0, 13])
+            ax[i].set_ylim([0, 30])
         else:
-            ax[i].set_ylim([0, 17])
+            ax[i].set_ylim([0, 90])
 
     fig.tight_layout()
     fig.savefig(join(root, 'perf.pdf'))
@@ -189,8 +189,36 @@ if __name__ == '__main__':
 
     root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    performance_csv(root)
-    plot_results_over_time(root)
+    # performance_csv(root)
+    # plot_results_over_time(root)
+
+    # df = pd.read_csv(join(root, 'all_models_results.csv'))
+    #
+    # df_list = []
+    #
+    # for d_model in df.groupby(by='Models ID'):
+    #     d_model = d_model[1].reindex(np.hstack(
+    #         (d_model[1].index.values[-5:],
+    #          d_model[1].index.values[:-5])))
+    #     # d_model = d_model.reset_index(drop=True)
+    #     for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+    #         d_loss = d_model[d_model['Loss'] == loss]
+    #         idxs = d_loss['Hparams']
+    #         bs = []
+    #         for i, idx in enumerate(idxs):
+    #             b = int(idx.split('b=')[1])
+    #             bs.append(b)
+    #         bs = np.array(bs)
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         d_loss = d_loss.reindex(bs.argsort())
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         df_list.append(d_loss)
+    #
+    #
+    # df = pd.concat(df_list)
+    # df = df.reset_index().drop('index', axis=1)
+    # df.to_csv(join(root, 'all_models_results2.csv'))
+    print("")
 
 
     
