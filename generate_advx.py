@@ -30,7 +30,7 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
     with tqdm(total=len(ds_loader)) as t:
         for batch_idx, (x,y) in enumerate(ds_loader):
             x, y = x.to(device), y.to(device)
-            x.requires_grad = True
+            # x.requires_grad = True
             advx = apgd(model, x, y,
                         eps=eps, norm=float('inf'), n_iter=n_steps)
             t.set_postfix(
