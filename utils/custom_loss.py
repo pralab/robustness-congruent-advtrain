@@ -62,10 +62,8 @@ class MyCrossEntropyLoss(BaseLoss, CrossEntropyLoss):
                                ignore_index=self.ignore_index, reduction=self.reduction,
                                label_smoothing=self.label_smoothing)
 
-
         if self.keep_loss_path:
             self.update_loss_path(loss)
-
         return loss
 
     def update_loss_path(self, loss):
@@ -73,7 +71,7 @@ class MyCrossEntropyLoss(BaseLoss, CrossEntropyLoss):
 
 
 class PCTLoss(BasePCTLoss):
-    def __init__(self, old_output_clean,
+    def __init__(self, old_output_clean=None,
                 gamma1=1, alpha1=0, beta1=1):
         super(PCTLoss, self).__init__()
         self.old_output_clean = old_output_clean
@@ -90,13 +88,22 @@ class PCTLoss(BasePCTLoss):
 
     
     def forward(self, model_output: Tensor, target: Tensor, 
-                batch_idx, batch_size, curr_batch_dim) -> Tensor:
+                old_output=None, batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
         loss_ce = self.ce(model_output, target.long())
 
-        # apply a weighting for each training sample based on old model outputs
-        old_outs, old_correct = self._logits_to_corrects(self.old_output_clean,
-                                                         target, batch_idx,
-                                                         batch_size, curr_batch_dim)
+        if old_output is None:
+            assert batch_idx is not None
+            assert batch_size is not None
+            assert curr_batch_dim is not None
+            # apply a weighting for each training sample based on old model outputs
+            old_outs, old_correct = self._logits_to_corrects(self.old_output_clean,
+                                                            target, batch_idx,
+                                                            batch_size, curr_batch_dim)
+        else:
+            old_outs = old_output
+            preds = torch.argmax(old_outs, dim=1)
+            old_correct = (preds == target)
+
         loss_pc = self._compute_loss_pc(model_output, old_correct, old_outs)
 
         # # combine CE loss and PCT loss
@@ -134,13 +141,36 @@ class MixedPCTLoss(BasePCTLoss):
         self.loss_keys = tuple(self.loss_path.keys())
 
 
-    def forward(self, model_output: Tensor, target: Tensor,
-                batch_idx: int, batch_size: int, curr_batch_dim: int) -> Tensor:
+    def forward(self, model_output: Tensor, target: Tensor, 
+                old_output=None, new_output=None, 
+                batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
 
-        outs1, correct1 = self._logits_to_corrects(self.output1, target,
+
+        if old_output is None:
+            assert batch_idx is not None
+            assert batch_size is not None
+            assert curr_batch_dim is not None
+            # apply a weighting for each training sample based on old model outputs
+            outs1, correct1 = self._logits_to_corrects(self.output1, target,
+                                                    batch_idx, batch_size, curr_batch_dim)
+
+        else:
+            outs1 = old_output
+            preds = torch.argmax(outs1, dim=1)
+            correct1 = (preds == target)
+        
+        if new_output is None:
+            assert batch_idx is not None
+            assert batch_size is not None
+            assert curr_batch_dim is not None
+            # apply a weighting for each training sample based on old model outputs
+            outs2, correct2 = self._logits_to_corrects(self.output2, target,
                                                    batch_idx, batch_size, curr_batch_dim)
-        outs2, correct2 = self._logits_to_corrects(self.output2, target,
-                                                   batch_idx, batch_size, curr_batch_dim)
+
+        else:
+            outs2 = new_output
+            preds = torch.argmax(outs2, dim=1)
+            correct2 = (preds == target)
 
         if self.only_nf:
             correct1 = correct1.logical_and(correct2.logical_not())
