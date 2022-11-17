@@ -2,7 +2,7 @@ from utils.data import get_cifar10_dataset, split_train_valid
 from utils.utils import MODEL_NAMES, set_all_seed, init_logger, save_params
 from torch.utils.data import DataLoader
 from robustbench.utils import load_model
-from utils.trainer import pc_train_epoch, freeze_network
+from utils.trainer import pc_train_epoch, adv_pc_train_epoch, freeze_network
 from utils.eval import get_ds_outputs, get_pct_results
 from utils.custom_loss import PCTLoss, MixedPCTLoss
 import torch
@@ -13,8 +13,8 @@ import pickle
 
 def train_pct_model(model, old_model,
                     train_loader, val_loader,
-                    epochs, loss_fn, lr, random_seed, device, 
-                    alpha, beta, exp_dir, trainable_layers=None,
+                    epochs, loss_name, lr, random_seed, device, 
+                    alpha, beta, exp_dir, trainable_layers=None, adv_training=False,
                     logger=None):
 
     set_all_seed(random_seed)
@@ -40,16 +40,19 @@ def train_pct_model(model, old_model,
 
     set_all_seed(random_seed)
     
-    if loss_fn == 'PCT':
-        loss_fn = PCTLoss(old_outputs, alpha1=alpha, beta1=beta,)
-    elif loss_fn == 'MixMSE':
-        loss_fn = MixedPCTLoss(old_outputs, new_outputs,
+    if loss_name == 'PCT':
+        loss_fn = PCTLoss(old_output_clean=old_outputs, alpha1=alpha, beta1=beta)
+        mixmse = False
+    elif loss_name == 'MixMSE':
+        loss_fn = MixedPCTLoss(output1=old_outputs, output2=new_outputs,
                                 alpha1=alpha, beta1=beta,
                                 only_nf=False)
-    elif loss_fn == 'MixMSE(NF)':
-        loss_fn = MixedPCTLoss(old_outputs, new_outputs,
+        mixmse = True
+    elif loss_name == 'MixMSE(NF)':
+        loss_fn = MixedPCTLoss(output1=old_outputs, output2=new_outputs,
                                 alpha1=alpha, beta1=beta,
                                 only_nf=True)
+        mixmse = True
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     if trainable_layers is not None:
         freeze_network(model, n_layer=trainable_layers)
@@ -65,8 +68,10 @@ def train_pct_model(model, old_model,
     best_acc = results['new_acc']
     best_nfr = results['nfr']
     for e in range(epochs):
-        pc_train_epoch(model, device, train_loader, optimizer, e, loss_fn)
-        
+        if not adv_training:
+            pc_train_epoch(model, device, train_loader, optimizer, e, loss_fn)
+        else:
+            adv_pc_train_epoch(model, old_model, device, train_loader, optimizer, e, loss_fn, mixmse)
         # evaluate on validation
         results = get_pct_results(new_model=model, ds_loader=val_loader, 
                         old_model=old_model, device=device)
@@ -114,10 +119,11 @@ if __name__ == '__main__':
                 else "cpu")
 
     random_seed=0
-    # old_model_ids=[3,4,5,6,7,8]
-    old_model_ids=[0,1,2]
+    old_model_ids=[0,1,2,3,4,5,6,7,8]
+    # old_model_ids=[3]
     # specify number of last layers to train, the others will be freezed, train all if None
     trainable_layers = None 
+    adv_training = True
     n_tr = None
     n_ts = None
     epochs=12
@@ -125,13 +131,17 @@ if __name__ == '__main__':
     lr=1e-3
     betas = [1, 2, 5, 10, 100]
     alphas = [1, 1, 1, 1, 1]
+    # betas = [1]
+    # alphas = [1]
     tr_model_sel = 'last'   # last, best_acc, best_nfr
-    exp_name = f"epochs-{epochs}_batchsize-{batch_size}"
+    exp_name = f"epochs-{epochs}_batchsize-{batch_size}_AT"
+    # exp_name = f"PROVADEBUG"
 
 
     root = 'results'
     date = datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")
     exp_path = os.path.join(root, f"{date}_{exp_name}")
+    # exp_path = os.path.join(root, exp_name)
 
     if not os.path.isdir(exp_path):
         os.mkdir(exp_path)
@@ -196,8 +206,9 @@ if __name__ == '__main__':
                         model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
                         train_pct_model(model=model, old_model=old_model,
                                         train_loader=train_loader, val_loader=val_loader,
-                                        epochs=epochs, loss_fn=loss_name, lr=lr, random_seed=random_seed, device=device,
+                                        epochs=epochs, loss_name=loss_name, lr=lr, random_seed=random_seed, device=device,
                                         alpha=alpha, beta=beta, trainable_layers=trainable_layers,
+                                        adv_training=adv_training,
                                         logger=logger, exp_dir=params_dir_path)
 
                         

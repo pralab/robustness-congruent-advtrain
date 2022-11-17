@@ -70,8 +70,8 @@ def performance_csv(root):
 
     all_models_df = pd.concat([models_dict[k] for k in models_dict.keys()], keys=models_dict)
     all_models_df.index.names = ['Models ID', 'Loss', 'Hparams']
-    all_models_df.sort_index()
-    # all_models_df.sort_index(inplace=True)
+    # all_models_df.sort_index()
+    all_models_df.sort_index(inplace=True)
     all_models_df.to_csv(join(root, f"all_models_results.csv"))
 
 
@@ -108,7 +108,7 @@ def plot_all_loss(root):
         print("")
 
 
-def plot_results_over_time(root, ax, fname='perf', row=0):
+def plot_results_over_time(root):
     df = pd.read_csv(join(root, 'all_models_results.csv'))
 
     loss_list = df['Loss'].unique()
@@ -149,17 +149,35 @@ def plot_results_over_time(root, ax, fname='perf', row=0):
     nfr_df.to_csv(join(root, 'nfr.csv'))
     pfr_df.to_csv(join(root, 'pfr.csv'))
 
+
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
         # if i == 0:
         #     df_i[['old', 'new']].plot(ax=ax[i], style='o--')
         # else:
-        df_i[['new']].plot(ax=ax[row, i], style='o--')
+        df_i[['new']].plot(ax=ax[i], style='o--')
         df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
-            .plot(ax=ax[row, i], style='o-', rot=45)
+            .plot(ax=ax[i], style='o-', rot=45)
 
-    #fig.tight_layout()
-    #fig.savefig(join(root, f"{fname}.pdf"))
-    #fig.show()
+
+    titles = ['Accuracy', 'NFR', 'PFR']
+    titles = [f"{t} (%)" for t in titles]
+    for i in range(3):
+        ax[i].set_title(titles[i])
+        # ax[i].get_xaxis().set_visible(False)
+        # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
+        #                  rotation=45)
+
+        if i == 0:
+            ax[i].set_ylim([0, 95])
+        elif i == 1:
+            ax[i].set_ylim([0, 30])
+        else:
+            ax[i].set_ylim([0, 90])
+
+    fig.tight_layout()
+    fig.savefig(join(root, 'perf.pdf'))
+    fig.show()
 
 
     print("")
@@ -169,37 +187,42 @@ def plot_results_over_time(root, ax, fname='perf', row=0):
 
 if __name__ == '__main__':
 
-    root_advx = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
     # performance_csv(root)
+    # plot_results_over_time(root)
 
-    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
-    for row, root_i in enumerate([root, root_advx]):
-        plot_results_over_time(root_i, fname='perf_zoom', row=row, ax=ax)
-
-        titles = ['Accuracy', 'NFR', 'PFR']
-        titles = [f"{t} (%)" for t in titles]
-        for i in range(3):
-            ax[row, i].set_title(titles[i])
-            # ax[i].get_xaxis().set_visible(False)
-            # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
-            #                  rotation=45)
-
-            # if i == 0:
-            #     ax[row, i].set_ylim([50, 72])
-            # elif i == 1:
-            #     ax[row, i].set_ylim([0, 12])
-            # else:
-            #     ax[row, i].set_ylim([0, 15])
-
-    ax[0, 0].set_ylabel('Clean samples')
-    ax[1, 0].set_ylabel('Advx samples ')
-
-    fig.tight_layout()
-    fig.savefig(join(root, "perf.pdf"))
-    fig.show()
-
+    # df = pd.read_csv(join(root, 'all_models_results.csv'))
+    #
+    # df_list = []
+    #
+    # for d_model in df.groupby(by='Models ID'):
+    #     d_model = d_model[1].reindex(np.hstack(
+    #         (d_model[1].index.values[-5:],
+    #          d_model[1].index.values[:-5])))
+    #     # d_model = d_model.reset_index(drop=True)
+    #     for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+    #         d_loss = d_model[d_model['Loss'] == loss]
+    #         idxs = d_loss['Hparams']
+    #         bs = []
+    #         for i, idx in enumerate(idxs):
+    #             b = int(idx.split('b=')[1])
+    #             bs.append(b)
+    #         bs = np.array(bs)
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         d_loss = d_loss.reindex(bs.argsort())
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         df_list.append(d_loss)
+    #
+    #
+    # df = pd.concat(df_list)
+    # df = df.reset_index().drop('index', axis=1)
+    # df.to_csv(join(root, 'all_models_results2.csv'))
     print("")
+
+
+    
+
 
 
 
