@@ -11,3 +11,4 @@ code_backup
 __pycache__
 *.out
 
+/churn/
