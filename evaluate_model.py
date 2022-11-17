@@ -108,7 +108,7 @@ def plot_all_loss(root):
         print("")
 
 
-def plot_results_over_time(root):
+def plot_results_over_time(root, ax, fname='perf', row=0):
     df = pd.read_csv(join(root, 'all_models_results.csv'))
 
     loss_list = df['Loss'].unique()
@@ -149,35 +149,17 @@ def plot_results_over_time(root):
     nfr_df.to_csv(join(root, 'nfr.csv'))
     pfr_df.to_csv(join(root, 'pfr.csv'))
 
-
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
         # if i == 0:
         #     df_i[['old', 'new']].plot(ax=ax[i], style='o--')
         # else:
-        df_i[['new']].plot(ax=ax[i], style='o--')
+        df_i[['new']].plot(ax=ax[row, i], style='o--')
         df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
-            .plot(ax=ax[i], style='o-', rot=45)
+            .plot(ax=ax[row, i], style='o-', rot=45)
 
-
-    titles = ['Accuracy', 'NFR', 'PFR']
-    titles = [f"{t} (%)" for t in titles]
-    for i in range(3):
-        ax[i].set_title(titles[i])
-        # ax[i].get_xaxis().set_visible(False)
-        # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
-        #                  rotation=45)
-
-        if i == 0:
-            ax[i].set_ylim([0, 95])
-        elif i == 1:
-            ax[i].set_ylim([0, 30])
-        else:
-            ax[i].set_ylim([0, 90])
-
-    fig.tight_layout()
-    # fig.savefig(join(root, 'perf.pdf'))
-    fig.show()
+    #fig.tight_layout()
+    #fig.savefig(join(root, f"{fname}.pdf"))
+    #fig.show()
 
 
     print("")
@@ -187,11 +169,37 @@ def plot_results_over_time(root):
 
 if __name__ == '__main__':
 
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
-    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_advx = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
+    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
     # performance_csv(root)
-    plot_results_over_time(root)
 
+    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
+    for row, root_i in enumerate([root, root_advx]):
+        plot_results_over_time(root_i, fname='perf_zoom', row=row, ax=ax)
+
+        titles = ['Accuracy', 'NFR', 'PFR']
+        titles = [f"{t} (%)" for t in titles]
+        for i in range(3):
+            ax[row, i].set_title(titles[i])
+            # ax[i].get_xaxis().set_visible(False)
+            # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
+            #                  rotation=45)
+
+            # if i == 0:
+            #     ax[row, i].set_ylim([50, 72])
+            # elif i == 1:
+            #     ax[row, i].set_ylim([0, 12])
+            # else:
+            #     ax[row, i].set_ylim([0, 15])
+
+    ax[0, 0].set_ylabel('Clean samples')
+    ax[1, 0].set_ylabel('Advx samples ')
+
+    fig.tight_layout()
+    fig.savefig(join(root, "perf.pdf"))
+    fig.show()
+
+    print("")
 
 
 

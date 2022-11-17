@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from secml.utils import fm
 import os
 import pandas as pd
-import seaborn as sns
 import torch
 import math
 
