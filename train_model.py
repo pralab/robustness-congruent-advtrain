@@ -131,8 +131,8 @@ if __name__ == '__main__':
     lr=1e-3
     betas = [1, 2, 5, 10, 100]
     alphas = [1, 1, 1, 1, 1]
-    betas = [1]
-    alphas = [1]
+    # betas = [1]
+    # alphas = [1]
     tr_model_sel = 'last'   # last, best_acc, best_nfr
     exp_name = f"epochs-{epochs}_batchsize-{batch_size}_AT"
     # exp_name = f"PROVADEBUG"

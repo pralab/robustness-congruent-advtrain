@@ -67,10 +67,11 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
     Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
     """
     model = model.to(device)
+    old_model.eval()
     batch_size = train_loader.batch_size
 
     if mixmse:
-        new_model = deepcopy(model)
+        new_model = deepcopy(model).to(device)
 
     with tqdm(total=len(train_loader)) as t:
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -99,9 +100,13 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
                         eps=eps, norm=float('inf'), n_iter=n_steps)            
             model.train()
             adv_output = model(advx)
-            adv_old_output = old_model(advx)
+
+            with torch.no_grad():
+                adv_old_output = old_model(advx)
+                if mixmse:
+                    adv_new_output = new_model(advx)
+                        
             if mixmse:
-                adv_new_output = new_model(advx)
                 loss = loss_fn(model_output=adv_output, target=target, 
                                     old_output=adv_old_output, new_output=adv_new_output)
             else:
