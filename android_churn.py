@@ -6,7 +6,7 @@ import pickle
 from tesseract import temporal
 from utils.eval import compute_nflips, compute_pflips
 from scipy.sparse import vstack
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, precision_score, recall_score, f1_score
 
 import matplotlib.pyplot as plt
 
@@ -18,11 +18,14 @@ if __name__ == "__main__":
     y = np.array([int(y[0]) for y in y])
     # Partition dataset
     splits = temporal.time_aware_train_test_split(
-       X, y, t, train_size=12, test_size=2, granularity='month')
+       X, y, t, train_size=12, test_size=1, granularity='month')
     X_train, X_tests, y_train, y_tests, t_train, t_tests, train, tests = splits
     # y_train = [int(y[0]) for y in y_train]
 
-    accs, nfrs, pfrs = [], [], []
+    precs, recs, f1s = [], [], []
+    nfrs_pos, pfrs_pos = [], []
+    nfrs_neg, pfrs_neg = [], []
+
     X_train_i = X_train
     y_train_i = y_train
 
@@ -35,41 +38,58 @@ if __name__ == "__main__":
         X_test_i = vstack((X_tests[i], X_tests[i+1]))
         y_test_i = np.hstack((y_tests[i], y_tests[i+1]))
         preds = clf.predict(X_test_i)
-        precision_recall_fscore_support(y_test_i, preds, average='macro')
-        # print(f"Acc = {acc*100} %")
-        # accs.append(acc)
+        prec, rec, f1, _ = precision_recall_fscore_support(y_test_i, preds,
+                                                           pos_label=1,
+                                                           average='binary')
+        precs.append(prec)
+        recs.append(rec)
+        f1s.append(f1)
 
         preds1 = preds[:X_tests[i].shape[0]]
 
         if i > 0:
-            nfr = compute_nflips(old_preds=preds2, new_preds=preds1) * 100
-            pfr = compute_pflips(old_preds=preds2, new_preds=preds1) * 100
-            print(f"NFR = {nfr} %")
-            print(f"PFR = {pfr} %")
+            nfr = compute_nflips(old_preds=preds2, new_preds=preds1, indexes=True)
+            pfr = compute_pflips(old_preds=preds2, new_preds=preds1, indexes=True)
+            nfr_pos = nfr[y_tests[i] == 1].mean()*100
+            nfr_neg = nfr[y_tests[i] == 0].mean()*100
+            pfr_pos = pfr[y_tests[i] == 1].mean()*100
+            pfr_neg = pfr[y_tests[i] == 0].mean()*100
         else:
-            nfr, pfr = None, None
+            nfr_pos, nfr_neg, pfr_pos, pfr_neg = None, None, None, None
 
-        nfrs.append(nfr)
-        pfrs.append(pfr)
+        nfrs_pos.append(nfr_pos)
+        nfrs_neg.append(nfr_neg)
+        pfrs_pos.append(pfr_pos)
+        pfrs_neg.append(pfr_neg)
 
         preds2 = preds[X_tests[i].shape[0]:]
         X_train_i = vstack((X_train_i, X_tests[i]))
         y_train_i = np.hstack((y_train_i, y_tests[i]))
 
+
     fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
-    ax[0].plot(accs, color='red', marker='o')
-    ax[1].plot(nfrs, color='blue', marker='v')
-    ax[2].plot(pfrs, color='green', marker='^')
+    ax[0].plot(f1s, color='blue', marker='o', label='F1')
+    ax[0].plot(precs, color='green', marker='*', label='Precision')
+    ax[0].plot(recs, color='red', marker='s', label='Recall')
 
-    titles = ['Acc', 'NFR', 'PFR']
+    ax[1].plot(nfrs_pos, color='red', marker='v', label='NFR-mw')
+    ax[1].plot(nfrs_neg, color='green', marker='^', label='NFR-gw')
+
+    ax[2].plot(pfrs_pos, color='red', marker='>', label='PFR-mw')
+    ax[2].plot(pfrs_neg, color='green', marker='<', label='PFR-gw')
+
+    titles = ['Accuracy (%)',
+              'Negative Flip Rate (%)',
+              'Positive Flip Rate (%)']
     for i, title in enumerate(titles):
         ax[i].set_title(title)
         ax[i].set_xlabel('Updates')
-        ax[i].set_xticks(np.arange(n_updates))
-    fig.legend()
+        ax[i].set_xticks(np.arange(start=0, stop=n_updates, step=3))
+        ax[i].legend()
     fig.tight_layout()
     fig.show()
+    fig.savefig(os.path.join('images/android', 'android_churn.pdf'))
     print("")
 
 
