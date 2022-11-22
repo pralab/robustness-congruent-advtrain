@@ -19,11 +19,9 @@ if __name__ == "__main__":
     n_features = 1000
 
     n_months = 1
-
     X, y = [], []
     n = []
     for t in range(n_months):
-
         delta = n_samples_per_month * unc_samples_per_month
         delta_n_samples = np.random.randint(
             int(delta*2)) - int(delta)
@@ -39,9 +37,9 @@ if __name__ == "__main__":
     for t in range(len(X)):
         clf = LinearSVC()
         clf.fit(X[t], y[t])
-        preds = clf.predict(X_t1)
+        preds = clf.predict(X[t + 1])
 
-        acc = (preds == y_t1).mean()
+        acc = (preds == y[t + 1]).mean()
         print(acc)
 
     print("")
