@@ -7,8 +7,9 @@ from utils.utils import MODEL_NAMES
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
 
+
 def performance_csv(root):
-    column_names = ['Acc0', 'Acc1', 'NFR1', 'PFR1', 
+    column_names = ['Acc0', 'Acc1', 'NFR1', 'PFR1',
                     'Acc(FT)', 'NFR(FT)', 'PFR(FT)']
     index_name = 'Hparams'
 
@@ -19,7 +20,7 @@ def performance_csv(root):
             model_pair_path = join(root, model_pair_dir)
 
             loss_dict = {}
-            if isdir(model_pair_path):            
+            if isdir(model_pair_path):
                 for loss_exp_dir in ['PCT', 'MixMSE', 'MixMSE(NF)']:
                     loss_exp_path = join(model_pair_path, loss_exp_dir)
                     if isdir(loss_exp_path):
@@ -33,14 +34,14 @@ def performance_csv(root):
                                 params_name = params_dir.replace('-', '=').replace('_', ',')
                                 if loss_exp_dir.startswith('Mix'):
                                     params_name = params_name.split(',')[1]
-                                
-                                try:                           
+
+                                try:
                                     with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
                                         results = pkl.load(f)
                                 except:
                                     with open(join(params_path, 'results_last.gz'), 'rb') as f:
                                         results = pkl.load(f)
-                                
+
                                 acc0 = results['old_acc']
                                 acc1 = results['orig_acc']
                                 nfr1 = results['orig_nfr']
@@ -53,7 +54,6 @@ def performance_csv(root):
 
                                 i += 1
 
-
                         idxs = params_df.index
                         bs = []
                         for i, idx in enumerate(idxs):
@@ -63,9 +63,8 @@ def performance_csv(root):
                         params_df = params_df.reindex(list(idxs[bs.argsort()]))
                         loss_dict[loss_exp_dir] = params_df
 
-
                 model_df = pd.concat([loss_dict[k] for k in loss_dict.keys()], keys=loss_dict)
-                model_df = (model_df*100).round(3)
+                model_df = (model_df * 100).round(3)
                 models_dict[model_pair_dir] = model_df
 
     all_models_df = pd.concat([models_dict[k] for k in models_dict.keys()], keys=models_dict)
@@ -76,7 +75,6 @@ def performance_csv(root):
 
 
 def plot_all_loss(root):
-
     model_dirs = ['old-3_new-4', 'old-4_new-5', 'old-5_new-6', 'old-6_new-7']
     loss_dirs = ['PCT', 'MixMSE', 'MixMSE(NF)']
     params_dirs = ['a-1_b-1', 'a-1_b-2', 'a-1_b-5', 'a-1_b-10', 'a-1_b-100']
@@ -84,20 +82,19 @@ def plot_all_loss(root):
     n_plot_x = len(loss_dirs)
     n_plot_y = len(params_dirs)
 
-    
     for i, model_pair_dir in enumerate(model_dirs):
         model_pair_path = join(root, model_pair_dir)
 
-        fig, ax = plt.subplots(n_plot_x, n_plot_y, figsize=(5*n_plot_y, 5*n_plot_x), squeeze=False)      
+        fig, ax = plt.subplots(n_plot_x, n_plot_y, figsize=(5 * n_plot_y, 5 * n_plot_x), squeeze=False)
         for j, loss_exp_dir in enumerate(loss_dirs):
             ax[j, 0].set_ylabel(loss_exp_dir)
 
             loss_exp_path = join(model_pair_path, loss_exp_dir)
             for k, params_dir in enumerate(params_dirs):
-                params_path = join(loss_exp_path, params_dir)                
+                params_path = join(loss_exp_path, params_dir)
                 params_name = params_dir.replace('-', '=').replace('_', ',')
-                if j==0:
-                    ax[0, k].set_title(params_name)                
+                if j == 0:
+                    ax[0, k].set_title(params_name)
                 with open(join(params_path, 'results_last.gz'), 'rb') as f:
                     results = pkl.load(f)
 
@@ -108,7 +105,7 @@ def plot_all_loss(root):
         print("")
 
 
-def plot_results_over_time(root):
+def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
     df = pd.read_csv(join(root, 'all_models_results.csv'))
 
     loss_list = df['Loss'].unique()
@@ -116,9 +113,14 @@ def plot_results_over_time(root):
     # sort_values -> NFR dal più piccolo al più grande
     # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
     # sort_index -> restore indexes, così ho i modelli in ordine
-    df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
-    df.drop(['Hparams'], axis=1, inplace=True)
 
+    if b is None:
+        df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)'])
+        df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
+    else:
+        df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
+
+    df.drop(['Hparams'], axis=1, inplace=True)
     new_cols = ['old', 'new'] + list(loss_list)
     acc_df = pd.DataFrame(columns=new_cols)
     nfr_df = pd.DataFrame(columns=new_cols)
@@ -128,18 +130,17 @@ def plot_results_over_time(root):
     nfr_df.index.name = 'Models'
     pfr_df.index.name = 'Models'
 
-
     for model in models_pair_list:
-        acc_list = [df[df['Models ID']==model]['Acc0'].iloc[0],
-                    df[df['Models ID']==model]['Acc1'].iloc[0]]
+        acc_list = [df[df['Models ID'] == model]['Acc0'].iloc[0],
+                    df[df['Models ID'] == model]['Acc1'].iloc[0]]
         nfr_list = [None,
-                    df[df['Models ID']==model]['NFR1'].iloc[0]]
+                    df[df['Models ID'] == model]['NFR1'].iloc[0]]
         pfr_list = [None,
-                    df[df['Models ID']==model]['PFR1'].iloc[0]]
+                    df[df['Models ID'] == model]['PFR1'].iloc[0]]
         for loss in loss_list:
-            acc_list.append(df[df['Models ID']==model][df['Loss']==loss]['Acc(FT)'].item())
-            nfr_list.append(df[df['Models ID']==model][df['Loss']==loss]['NFR(FT)'].item())
-            pfr_list.append(df[df['Models ID']==model][df['Loss']==loss]['PFR(FT)'].item())
+            acc_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['Acc(FT)'].item())
+            nfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['NFR(FT)'].item())
+            pfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['PFR(FT)'].item())
 
         acc_df.loc[model] = acc_list
         nfr_df.loc[model] = nfr_list
@@ -149,48 +150,88 @@ def plot_results_over_time(root):
     nfr_df.to_csv(join(root, 'nfr.csv'))
     pfr_df.to_csv(join(root, 'pfr.csv'))
 
-
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
     for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
         # if i == 0:
         #     df_i[['old', 'new']].plot(ax=ax[i], style='o--')
         # else:
-        df_i[['new']].plot(ax=ax[i], style='o--')
-        df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
-            .plot(ax=ax[i], style='o-', rot=45)
 
+        # df_i[['new']].plot(ax=ax[row, i], style='o--')
+        # df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
+        #     .plot(ax=ax[row, i], style='o-', rot=45)
+
+        models_ids = df_i.index.to_numpy()[:3]
+        new = df_i['new'].to_numpy()[:3]
+        pct = df_i['PCT'].to_numpy()[:3]
+        mixmse = df_i['MixMSE'].to_numpy()[:3]
+        mixmsenf = df_i['MixMSE(NF)'].to_numpy()[:3]
+
+        line = 'solid' if adv_tr else 'dashed'
+        alpha = 0.6
+        markersize = 6
+        linewidth = 1
+
+        if not adv_tr:
+            ax[row, i].plot(new, color='gray', marker='o', linestyle='dotted',
+                            label='new', alpha=alpha,
+                            markersize=markersize, linewidth=linewidth)
+        ax[row, i].plot(pct, color='green', marker='*', linestyle=line,
+                        label='AT-PCT' if adv_tr else 'PCT', alpha=alpha,
+                        markersize=markersize, linewidth=linewidth)
+        ax[row, i].plot(mixmse, color='blue', marker='^', linestyle=line,
+                        label='AT-MixMSE' if adv_tr else 'MixMSE', alpha=alpha,
+                        markersize=markersize, linewidth=linewidth)
+        ax[row, i].plot(mixmsenf, color='red', marker='v', linestyle=line,
+                        label='AT-MixMSE(NF)' if adv_tr else 'MixMSE(NF)', alpha=alpha,
+                        markersize=markersize, linewidth=linewidth)
+
+        ax[row, i].set_xticks(range(len(models_ids)), models_ids, rotation=45)
 
     titles = ['Accuracy', 'NFR', 'PFR']
     titles = [f"{t} (%)" for t in titles]
     for i in range(3):
-        ax[i].set_title(titles[i])
+        ax[row, i].set_title(titles[i])
         # ax[i].get_xaxis().set_visible(False)
         # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
         #                  rotation=45)
 
-        if i == 0:
-            ax[i].set_ylim([0, 95])
-        elif i == 1:
-            ax[i].set_ylim([0, 30])
-        else:
-            ax[i].set_ylim([0, 90])
+        # if i == 0:
+        #     ax[row, i].set_ylim([0, 95])
+        # elif i == 1:
+        #     ax[row, i].set_ylim([0, 30])
+        # else:
+        #     ax[row, i].set_ylim([0, 90])
 
-    fig.tight_layout()
-    fig.savefig(join(root, 'perf.pdf'))
-    fig.show()
-
+    # fig.tight_layout()
+    # # fig.savefig(join(root, 'perf.pdf'))
+    # fig.show()
 
     print("")
 
 
-
-
 if __name__ == '__main__':
+    root = 'results/AT_prova'
+    root_clean = 'results/AT_prova/clean'
+    root_advx = 'results/AT_prova/advx'
+    root_clean_AT = 'results/AT_prova/clean_AT'
+    root_advx_AT = 'results/AT_prova/advx_AT'
 
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
+    b = 1
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
     # performance_csv(root)
-    # plot_results_over_time(root)
+
+    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
+    plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
+    plot_results_over_time(root_clean_AT, ax=ax, row=0, adv_tr=True, b=b)
+    plot_results_over_time(root_advx, ax=ax, row=1, adv_tr=False, b=b)
+    plot_results_over_time(root_advx_AT, ax=ax, row=1, adv_tr=True, b=b)
+
+    ax[0, 0].set_ylabel('Clean data')
+    ax[1, 0].set_ylabel('Adversarial data')
+    ax[-1, -1].legend()
+    fig.tight_layout()
+    # fig.savefig(join(root, 'perf_AT.pdf'))
+    fig.show()
 
     # df = pd.read_csv(join(root, 'all_models_results.csv'))
     #
@@ -221,7 +262,6 @@ if __name__ == '__main__':
     print("")
 
 
-    
 
 
 
@@ -229,7 +269,8 @@ if __name__ == '__main__':
 
 
 
-                            
-                            
-        
+
+
+
+
 
