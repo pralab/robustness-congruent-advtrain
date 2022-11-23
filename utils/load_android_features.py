@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 from sklearn.feature_extraction import DictVectorizer
 import os
+from scipy.sparse import csr_matrix
 
 DS_PATH = 'datasets/Android/features'
 
@@ -74,7 +75,7 @@ def generate_random_temporal_features(n_samples_per_month=1000,
 
         X_t = np.random.randint(2, size=(n_samples, n_features))
         y_t = np.random.randint(2, size=n_samples)
-        X.append(X_t)
+        X.append(csr_matrix(X_t))
         y.append(y_t)
     return X, y
 
