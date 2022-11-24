@@ -10,6 +10,32 @@ from sklearn.metrics import precision_recall_fscore_support, precision_score, re
 
 import matplotlib.pyplot as plt
 
+def ds_stack(X: list, y:list,
+             start: int = 0, n_months: int = 12):
+    X_stack = vstack(X[start: start + n_months])
+    y_stack = np.hstack(y[start: start + n_months])
+
+    idx = 0
+    idxs = []
+    for x in X[start: start + n_months]:
+        idx += x.shape[0]
+        idxs.append(idx)
+
+    X_unstack, y_unstack = ds_unstack(X_stack, y_stack, idxs)
+
+    s = 0
+    for i in range(n_months):
+        s += (X_unstack[i] != X[start: start + n_months][i]).nnz
+        s += (y_unstack[i] != y[start: start + n_months][i]).sum()
+    assert s == 0
+
+    return X_stack, y_stack, idxs
+
+def ds_unstack(X: csr_matrix, y: np.ndarray, idxs: list):
+    X_unstack = [X[0 if i == 0 else idxs[i-1]: idxs[i]] for i in range(len(idxs))]
+    y_unstack = np.split(y, idxs)[:-1]
+    return X_unstack, y_unstack
+
 if __name__ == "__main__":
     C_list = [0.001, 0.01, 0.1, 1]
     class_weight = 'balanced'
@@ -17,7 +43,7 @@ if __name__ == "__main__":
     test_size = 3
     train_size = 12
 
-    fname = "results_balanced"
+    fname = "results_prova"
     results_path = f"results/android/{fname}.pkl"
 
     if not os.path.exists(results_path):
@@ -26,9 +52,8 @@ if __name__ == "__main__":
         X, y, t, m = ds['X'], ds['y'], ds['t'], ds['m']
         y = np.array([int(y[0]) for y in y])
         # Partition dataset
-        splits = temporal.time_aware_train_test_split(
+        _, X, _, y, *_ = temporal.time_aware_train_test_split(
            X, y, t, train_size=0, test_size=1, granularity='month')
-        X_train, X_tests, y_train, y_tests, t_train, t_tests, train, tests = splits
 
         # X, y = generate_random_temporal_features(n_samples_per_month=100,
         #                                          n_features=100,
@@ -38,8 +63,6 @@ if __name__ == "__main__":
         for row, C in enumerate(C_list):
             t = f" C={C} "
             print(f"{t:#^40}")
-            X_train_i = X_train
-            y_train_i = y_train
 
             # X_train_i = X[0]
             # y_train_i = y[0]
@@ -52,6 +75,8 @@ if __name__ == "__main__":
             n_updates = len(X_tests) - 15
             for i in range(n_updates):
                 print(f"> M{i} ({i}/{n_updates})")
+
+                X_train_i, y_train_i = ds_stack(X, y, start=0, n_months=train_size)
 
                 clf = LinearSVC(C=C, class_weight=class_weight)
                 clf.fit(X_train_i,
@@ -66,6 +91,10 @@ if __name__ == "__main__":
 
                 X_test_i = vstack((X_tests[i], X_tests[i+1]))
                 y_test_i = np.hstack((y_tests[i], y_tests[i+1]))
+
+                X_test_i, y_test_i, test_idxs = ds_stack(X, y,
+                                                         start=train_size + i,
+                                                         n_months=test_size)
                 preds = clf.predict(X_test_i)
                 prec, rec, f1, _ = precision_recall_fscore_support(y_test_i, preds,
                                                                    pos_label=1,
