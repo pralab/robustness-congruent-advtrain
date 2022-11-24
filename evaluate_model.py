@@ -187,10 +187,10 @@ def plot_results_over_time(root):
 
 if __name__ == '__main__':
 
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_ft'
+    root = 'results/AT_prova/advx_ft'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    # performance_csv(root)
-    # plot_results_over_time(root)
+    performance_csv(root)
+    plot_results_over_time(root)
 
     # df = pd.read_csv(join(root, 'all_models_results.csv'))
     #
