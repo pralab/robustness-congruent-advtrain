@@ -6,11 +6,14 @@ import numpy as np
 from utils.utils import MODEL_NAMES
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
+import torch
 
 
-def performance_csv(root):
+def performance_csv(root, fname="all_models_results"):
     column_names = ['Acc0', 'Acc1', 'NFR1', 'PFR1',
                     'Acc(FT)', 'NFR(FT)', 'PFR(FT)']
+                    
+                    # 'val-Acc(FT)', 'val-NFR(FT)', 'val-PFR(FT)']
     index_name = 'Hparams'
 
     models_dict = {}
@@ -35,12 +38,22 @@ def performance_csv(root):
                                 if loss_exp_dir.startswith('Mix'):
                                     params_name = params_name.split(',')[1]
 
-                                try:
+                                if os.path.exists(join(params_path, 'results_best_nfr.gz')):
                                     with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
                                         results = pkl.load(f)
-                                except:
+                                        # ckpt = torch.load(join(params_path, 'checkpoints/best_nfr.pt'))
+                                        # val_res = ckpt['perf']
+
+                                elif os.path.exists(join(params_path, 'results_best_acc.gz')):
+                                    with open(join(params_path, 'results_best_acc.gz'), 'rb') as f:
+                                        results = pkl.load(f)
+                                        # ckpt = torch.load(join(params_path, 'checkpoints/best_acc.pt'))
+                                        # val_res = ckpt['perf']
+                                else:
                                     with open(join(params_path, 'results_last.gz'), 'rb') as f:
                                         results = pkl.load(f)
+                                        # ckpt = torch.load(join(params_path, 'checkpoints/last.pt'))
+                                        # val_res = ckpt['perf']
 
                                 acc0 = results['old_acc']
                                 acc1 = results['orig_acc']
@@ -50,7 +63,9 @@ def performance_csv(root):
                                 nfr = results['nfr']
                                 pfr = results['pfr']
 
-                                params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, acc, nfr, pfr]
+                                params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, 
+                                                                acc, nfr, pfr]#,
+                                                                # val_res['acc'], val_res['nfr'], val_res['pfr']]
 
                                 i += 1
 
@@ -71,7 +86,7 @@ def performance_csv(root):
     all_models_df.index.names = ['Models ID', 'Loss', 'Hparams']
     # all_models_df.sort_index()
     all_models_df.sort_index(inplace=True)
-    all_models_df.to_csv(join(root, f"all_models_results.csv"))
+    all_models_df.to_csv(join(root, f"{fname}.csv"))
 
 
 def plot_all_loss(root):
@@ -209,16 +224,19 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 
 
 if __name__ == '__main__':
-    root = 'results/AT_prova'
-    root_clean = 'results/AT_prova/clean'
-    root_advx = 'results/AT_prova/advx'
-    root_clean_AT = 'results/AT_prova/clean_AT'
-    root_advx_AT = 'results/AT_prova/advx_AT'
 
-    b = 1
+    root = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_advx = f"{root_clean}/advx_ft"
+    root_clean_AT = root
+    root_advx_AT = f"{root_clean_AT}/advx_ft"
+
+    b = None
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    # performance_csv(root)
+
+    # for root_i in [root_clean_AT, root_advx_AT]:
+    #     performance_csv(root)
 
     fig, ax = plt.subplots(2, 3, figsize=(15, 10))
     plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
@@ -230,7 +248,7 @@ if __name__ == '__main__':
     ax[1, 0].set_ylabel('Adversarial data')
     ax[-1, -1].legend()
     fig.tight_layout()
-    # fig.savefig(join(root, 'perf_AT.pdf'))
+    fig.savefig(join(root, 'perf_AT.pdf'))
     fig.show()
 
     # df = pd.read_csv(join(root, 'all_models_results.csv'))
