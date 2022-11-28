@@ -174,11 +174,11 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
         # df_i[['PCT', 'MixMSE', 'MixMSE(NF)']]\
         #     .plot(ax=ax[row, i], style='o-', rot=45)
 
-        models_ids = df_i.index.to_numpy()[:3]
-        new = df_i['new'].to_numpy()[:3]
-        pct = df_i['PCT'].to_numpy()[:3]
-        mixmse = df_i['MixMSE'].to_numpy()[:3]
-        mixmsenf = df_i['MixMSE(NF)'].to_numpy()[:3]
+        models_ids = df_i.index.to_numpy()
+        new = df_i['new'].to_numpy()
+        pct = df_i['PCT'].to_numpy()
+        mixmse = df_i['MixMSE'].to_numpy()
+        mixmsenf = df_i['MixMSE(NF)'].to_numpy()
 
         line = 'solid' if adv_tr else 'dashed'
         alpha = 0.6
@@ -202,7 +202,7 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
         ax[row, i].set_xticks(range(len(models_ids)), models_ids, rotation=45)
 
     titles = ['Accuracy', 'NFR', 'PFR']
-    titles = [f"{t} (%)" for t in titles]
+    titles = [f"{'Robust' if row==1 else ''} {t} (%)" for t in titles]
     for i in range(3):
         ax[row, i].set_title(titles[i])
         # ax[i].get_xaxis().set_visible(False)
@@ -225,8 +225,8 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 
 if __name__ == '__main__':
 
-    root = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
-    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR'
+    root_clean = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR'
     root_advx = f"{root_clean}/advx_ft"
     root_clean_AT = root
     root_advx_AT = f"{root_clean_AT}/advx_ft"
