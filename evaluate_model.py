@@ -177,8 +177,8 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
         models_ids = df_i.index.to_numpy()
         new = df_i['new'].to_numpy()
         pct = df_i['PCT'].to_numpy()
-        mixmse = df_i['MixMSE'].to_numpy()
-        mixmsenf = df_i['MixMSE(NF)'].to_numpy()
+        # mixmse = df_i['MixMSE'].to_numpy()[:3]
+        # mixmsenf = df_i['MixMSE(NF)'].to_numpy()[:3]
 
         line = 'solid' if adv_tr else 'dashed'
         alpha = 0.6
@@ -187,22 +187,22 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 
         if not adv_tr:
             ax[row, i].plot(new, color='gray', marker='o', linestyle='dotted',
-                            label='new', alpha=alpha,
+                            label='baseline', alpha=alpha,
                             markersize=markersize, linewidth=linewidth)
         ax[row, i].plot(pct, color='green', marker='*', linestyle=line,
                         label='AT-PCT' if adv_tr else 'PCT', alpha=alpha,
                         markersize=markersize, linewidth=linewidth)
-        ax[row, i].plot(mixmse, color='blue', marker='^', linestyle=line,
-                        label='AT-MixMSE' if adv_tr else 'MixMSE', alpha=alpha,
-                        markersize=markersize, linewidth=linewidth)
-        ax[row, i].plot(mixmsenf, color='red', marker='v', linestyle=line,
-                        label='AT-MixMSE(NF)' if adv_tr else 'MixMSE(NF)', alpha=alpha,
-                        markersize=markersize, linewidth=linewidth)
+        # ax[row, i].plot(mixmse, color='blue', marker='^', linestyle=line,
+        #                 label='AT-MixMSE' if adv_tr else 'MixMSE', alpha=alpha,
+        #                 markersize=markersize, linewidth=linewidth)
+        # ax[row, i].plot(mixmsenf, color='red', marker='v', linestyle=line,
+        #                 label='AT-MixMSE(NF)' if adv_tr else 'MixMSE(NF)', alpha=alpha,
+        #                 markersize=markersize, linewidth=linewidth)
 
         ax[row, i].set_xticks(range(len(models_ids)), models_ids, rotation=45)
 
     titles = ['Accuracy', 'NFR', 'PFR']
-    titles = [f"{'Robust' if row==1 else ''} {t} (%)" for t in titles]
+    titles = [f"{t} (%)" for t in titles]
     for i in range(3):
         ax[row, i].set_title(titles[i])
         # ax[i].get_xaxis().set_visible(False)
@@ -235,8 +235,8 @@ if __name__ == '__main__':
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
 
-    # for root_i in [root_clean_AT, root_advx_AT]:
-    #     performance_csv(root)
+    # for root_i in [root_clean, root_advx, root_clean_AT, root_advx_AT]:
+    #     performance_csv(root_i)
 
     fig, ax = plt.subplots(2, 3, figsize=(15, 10))
     plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
