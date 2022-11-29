@@ -9,6 +9,10 @@ import torch
 import os
 from datetime import datetime
 import pickle
+import math
+import numpy as np
+
+import argparse
 
 
 def train_pct_model(model, old_model,
@@ -81,24 +85,53 @@ def train_pct_model(model, old_model,
                 f"NFR: {nfr*100:.3f}%, "\
                 f"PFR: {pfr*100:.3f}%")
 
+        val_perf = {'acc': acc, 'nfr': nfr, 'pfr': pfr}
         model_data = {
             'epoch': e,
             'model_state_dict': model.cpu().state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': loss_fn,
-            'perf': {'acc': acc, 'nfr': nfr, 'pfr': pfr}
+            'perf': val_perf
             }
 
         if acc > best_acc:
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_acc.pt"))
+            with open(os.path.join(exp_dir, 'val_perf_best_acc.gz'), 'wb') as f:
+                pickle.dump(val_perf, f)
         
-        # il secondo causa errore di scrittura file!!!
         if nfr < best_nfr:
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
+            with open(os.path.join(exp_dir, 'val_perf_best_nfr.gz'), 'wb') as f:
+                pickle.dump(val_perf, f)
 
     torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
+    with open(os.path.join(exp_dir, 'val_perf_last.gz'), 'wb') as f:
+        pickle.dump(val_perf, f)
 
 
+def select_model_from_validation(loss_dir_path, alphas, betas):
+    paths, accs, nfrs = [], [], []
+    for i, (alpha, beta) in enumerate(zip(alphas, betas)):
+        params_dir_path = os.path.join(loss_dir_path, f"a-{alpha}_b-{beta}")
+        for sel in ['best_nfr', 'best_acc', 'last']:
+            fname = os.path.join(params_dir_path, f"val_perf_{sel}.gz")
+            if os.path.exists(fname):
+                with open(fname, 'rb') as f:
+                    val_perf = pickle.load(f)
+                paths.append(os.path.join(params_dir_path, f"checkpoints/{sel}.pt"))
+                break
+        
+        accs.append(val_perf['acc'])
+        nfrs.append(val_perf['nfr'])
+    paths, accs, nfrs = np.array(paths), np.array(accs), np.array(nfrs)
+    nfr_cond = np.where(nfrs==nfrs.min())
+    paths, accs = paths[nfr_cond], accs[nfr_cond]
+    acc_cond = np.where(accs==accs.min())[0][0]
+    old_model_path_ftuned = paths[acc_cond].item()
+
+    logger.debug(f"Reference old model path: {old_model_path_ftuned}")
+    
+    return old_model_path_ftuned
 
 
 def print_perf(s0, oldacc, newacc, nfr, pfr):
@@ -110,32 +143,36 @@ def print_perf(s0, oldacc, newacc, nfr, pfr):
     return s
 
 
-
-
-
-
 if __name__ == '__main__':
-    device = torch.device("cuda:1" if torch.cuda.is_available()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-cuda', default=1, type=int)
+    parser.add_argument('-adv_tr', default=0, type=int)
+    parser.add_argument('-exp_name', default='exp', type=str)
+    args = parser.parse_args()
+
+    device = torch.device(f"cuda:{args.cuda}" if torch.cuda.is_available()
                 else "cpu")
 
     random_seed=0
-    old_model_ids=[0,1,2,3,4,5,6,7,8]
+    old_model_ids=[1,2,3,4,5,6]
     # old_model_ids=[3]
     # specify number of last layers to train, the others will be freezed, train all if None
     trainable_layers = None 
-    adv_training = True
-    n_tr = None
+    adv_training = bool(args.adv_tr)
+    temporal = True
+    n_tr = None  
     n_ts = None
     epochs=12
     batch_size=500
     lr=1e-3
-    betas = [1, 2, 5, 10, 100]
-    alphas = [1, 1, 1, 1, 1]
+    loss_names = ['PCT'] #, 'MixMSE', 'MixMSE(NF)']
+    betas = [1, 2, 5, 10]
+    alphas = [1, 1, 1, 1]
     # betas = [1]
     # alphas = [1]
-    tr_model_sel = 'last'   # last, best_acc, best_nfr
-    exp_name = f"epochs-{epochs}_batchsize-{batch_size}_AT"
-    # exp_name = f"PROVADEBUG"
+    exp_name = f"epochs-{epochs}_batchsize-{batch_size}_{args.exp_name}"
+    # exp_name = f"PROVADEBUG_CLEAN"
 
 
     root = 'results'
@@ -162,35 +199,51 @@ if __name__ == '__main__':
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    for old_model_id in old_model_ids:       
+
+    for old_model_id in old_model_ids:   
+        # if old_model_id == old_model_ids[0]:
+        #     continue    
 
         model_id = old_model_id + 1
+
         model_pair_dir = f"old-{old_model_id}_new-{model_id}"
         model_pair_path = os.path.join(exp_path, model_pair_dir)
+
         if not os.path.isdir(model_pair_path):
             os.mkdir(model_pair_path)
 
         logger.info(f"------- MODELS {old_model_id}- -------")
-        try:
-            #####################################
-            # GET MODELS
-            #####################################
-            old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf')
-            model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+        try:               
 
-            logger.debug('Get baseline results')
-            base_results = get_pct_results(new_model=model, ds_loader=test_loader, 
-                                            old_model=old_model,
-                                            device=device)
-            old_correct = base_results['old_correct']
-
-            logger.info(print_perf("\n>>> Starting test perf \n",
-                base_results['old_acc'], base_results['new_acc'], 
-                base_results['nfr'], base_results['pfr']))
-
-            for i, loss_name in enumerate(['PCT', 'MixMSE', 'MixMSE(NF)']):
+            for i, loss_name in enumerate(loss_names):
                 logger.info(f"------- LOSS: {loss_name} --------")
                 loss_dir_path = os.path.join(model_pair_path, loss_name)
+
+                #####################################
+                # GET MODELS
+                #####################################                    
+                
+                old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf')
+                if temporal and (old_model_id != old_model_ids[0]):
+                    # Select as a reference the best previous models
+                    old_model_pair_dir = f"old-{old_model_id-1}_new-{model_id-1}"
+                    old_model_pair_path = os.path.join(exp_path, old_model_pair_dir)
+                    old_best_model_path_ftuned = select_model_from_validation(loss_dir_path=os.path.join(old_model_pair_path, loss_name),
+                                                                        alphas=alphas, betas=betas)
+                    ckpt = torch.load(old_best_model_path_ftuned)
+                    old_model.load_state_dict(ckpt['model_state_dict'])
+                
+                model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+
+                logger.debug('Get baseline results')
+                base_results = get_pct_results(new_model=model, ds_loader=test_loader, 
+                                                old_model=old_model,
+                                                device=device)
+                old_correct = base_results['old_correct']
+
+                logger.info(print_perf("\n>>> Starting test perf \n",
+                    base_results['old_acc'], base_results['new_acc'], 
+                    base_results['nfr'], base_results['pfr']))
 
                 for alpha, beta in list(zip(alphas, betas)):
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
