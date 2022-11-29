@@ -155,7 +155,8 @@ if __name__ == '__main__':
     import argparse
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('-cuda', default=1, type=int)
+    parser.add_argument('-cuda', default=1, type=int, choices=[0, 1])
+    parser.add_argument('-exp_id', default=0, type=int, choices=[0, 1])
     args = parser.parse_args()
 
     batch_size = 200
@@ -164,9 +165,11 @@ if __name__ == '__main__':
 
 
     set_all_seed(0)
-    root = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    roots = ['results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR',
+            'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR']
+    root = roots[args.exp_id]
     device = f"cuda:{args.cuda}" if torch.cuda.is_available() else 'cpu'
-    split_cuda = True
+    split_cuda = False
 
 
     advx_folder = os.path.join(root, 
@@ -175,8 +178,8 @@ if __name__ == '__main__':
         os.mkdir(advx_folder)
 
 
-    logger = init_logger(advx_folder, fname="progress_advx" + f"_{device}" if split_cuda else "")
-    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=[0,1,2])
+    logger = init_logger(advx_folder, fname="progress_advx" + f"_{device}" if split_cuda else "progress_advx")
+    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=[1,2,4,5,6])
 
 
     if split_cuda:
