@@ -4,9 +4,69 @@ import pickle as pkl
 import pandas as pd
 import numpy as np
 from utils.utils import MODEL_NAMES
+from utils.eval import compute_nflips
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
 import torch
+from itertools import product
+import pickle
+
+
+def main():
+    
+    root = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR'
+    root_clean = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR'
+    root_advx = f"{root_clean}/advx_ft"
+    root_clean_AT = root
+    root_advx_AT = f"{root_clean_AT}/advx_ft"
+
+    b = None
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
+    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+
+    # for root_i in [root_clean, root_advx, root_clean_AT, root_advx_AT]:
+    #     performance_csv(root_i)
+
+    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
+    plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
+    plot_results_over_time(root_clean_AT, ax=ax, row=0, adv_tr=True, b=b)
+    plot_results_over_time(root_advx, ax=ax, row=1, adv_tr=False, b=b)
+    plot_results_over_time(root_advx_AT, ax=ax, row=1, adv_tr=True, b=b)
+
+    ax[0, 0].set_ylabel('Clean data')
+    ax[1, 0].set_ylabel('Adversarial data')
+    ax[-1, -1].legend()
+    fig.tight_layout()
+    fig.savefig(join(root, 'perf_AT.pdf'))
+    fig.show()
+
+    # df = pd.read_csv(join(root, 'all_models_results.csv'))
+    #
+    # df_list = []
+    #
+    # for d_model in df.groupby(by='Models ID'):
+    #     d_model = d_model[1].reindex(np.hstack(
+    #         (d_model[1].index.values[-5:],
+    #          d_model[1].index.values[:-5])))
+    #     # d_model = d_model.reset_index(drop=True)
+    #     for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+    #         d_loss = d_model[d_model['Loss'] == loss]
+    #         idxs = d_loss['Hparams']
+    #         bs = []
+    #         for i, idx in enumerate(idxs):
+    #             b = int(idx.split('b=')[1])
+    #             bs.append(b)
+    #         bs = np.array(bs)
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         d_loss = d_loss.reindex(bs.argsort())
+    #         d_loss = d_loss.reset_index().drop('index', axis=1)
+    #         df_list.append(d_loss)
+    #
+    #
+    # df = pd.concat(df_list)
+    # df = df.reset_index().drop('index', axis=1)
+    # df.to_csv(join(root, 'all_models_results2.csv'))
+    print("")
 
 
 def performance_csv(root, fname="all_models_results"):
@@ -222,64 +282,84 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 
     print("")
 
+def compute_churn_matrix(model_ids = (1,2,3,4,5,6),
+                        path='results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500',
+                         advx=False):
+    
+    # for model_id in model_ids:
+    #     model_name = MODEL_NAMES[model_id]
+    #     model = load_model(model_name, dataset='cifar10', threat_model='Linf')
+
+    if advx:
+        path = 'results/advx'
+        
+    c = 0
+    correct_preds_matrix = None #np.empty(shape=())
+    new_correct = None
+    for i, model_id in enumerate(model_ids):
+        for root, dirs, files in os.walk(path):
+            if (f"old-{model_id}" in root) \
+                and (any('results_' in file_name for file_name in files) and ('advx' not in root)):
+                    
+                # res_list = [file_name for file_name in files if 'results_' in file_name]
+                # for res in res_list:
+                results_fname = next((file_name for file_name in files if 'results_' in file_name))
+                with open(os.path.join(root, results_fname), 'rb') as f:
+                    results = pickle.load(f)
+                old_correct = results['old_correct'].numpy()
+                print(f"{model_id} -> Old acc: {old_correct.mean()}")
+                if correct_preds_matrix is None:
+                    correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
+                correct_preds_matrix[i, :] = old_correct
+                c += 1
+                break
+    
+    if c == 0:
+        for i, model_id in enumerate(model_ids):
+            for root, dirs, files in os.walk(path):
+                if ((MODEL_NAMES[model_id] in root) and ('advx' in root) and ('correct_preds.gz' in files)):
+                    with open(os.path.join(root, 'correct_preds.gz'), 'rb') as f:
+                        old_correct = pickle.load(f).numpy()
+                    print(f"{model_id} -> Old acc: {old_correct.mean()}")
+                    if correct_preds_matrix is None:
+                        correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
+                    correct_preds_matrix[i, :] = old_correct
+                    c += 1
+                    break
+    assert c == len(model_ids)
+
+    idxs = np.arange(len(model_ids))
+
+    models_acc_gain_matrix = np.empty(shape=(len(model_ids), len(model_ids)))
+    models_nfr_matrix = models_acc_gain_matrix.copy()    
+    for i, j in product(idxs, idxs):
+        models_acc_gain_matrix[i, j] = (correct_preds_matrix[j, :].mean() - correct_preds_matrix[i, :].mean())*100
+        models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])*100
+    
+    return models_acc_gain_matrix, models_nfr_matrix
+
+
 
 if __name__ == '__main__':
+    # acc_gain_matrix, nfr_matrix = compute_churn_matrix()
+    # rob_acc_gain_matrix, rob_nfr_matrix = compute_churn_matrix(advx=True)
 
-    root = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR'
-    root_clean = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR'
-    root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = root
-    root_advx_AT = f"{root_clean_AT}/advx_ft"
+    # data = {'acc': acc_gain_matrix, 'nfr': nfr_matrix,
+    #         'rob_acc': acc_gain_matrix, 'rob_nfr': nfr_matrix,
+    #         'model_ids': (1,2,3,4,5,6),
+    #         'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
+    # data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
 
-    b = None
-    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
-    # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    # with open('results/perf_matrix.gz', 'wb') as f:
+    #     pickle.dump(data, f)
 
-    # for root_i in [root_clean, root_advx, root_clean_AT, root_advx_AT]:
-    #     performance_csv(root_i)
+    with open('results/perf_matrix.gz', 'rb') as f:
+        data = pickle.load(f)
 
-    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
-    plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
-    plot_results_over_time(root_clean_AT, ax=ax, row=0, adv_tr=True, b=b)
-    plot_results_over_time(root_advx, ax=ax, row=1, adv_tr=False, b=b)
-    plot_results_over_time(root_advx_AT, ax=ax, row=1, adv_tr=True, b=b)
+    acc_gain_matrix, nfr_matrix = data['acc'], data['nfr']
+    rob_acc_gain_matrix, rob_nfr_matrix = data['rob_acc'], data['rob_nfr']
 
-    ax[0, 0].set_ylabel('Clean data')
-    ax[1, 0].set_ylabel('Adversarial data')
-    ax[-1, -1].legend()
-    fig.tight_layout()
-    fig.savefig(join(root, 'perf_AT.pdf'))
-    fig.show()
-
-    # df = pd.read_csv(join(root, 'all_models_results.csv'))
-    #
-    # df_list = []
-    #
-    # for d_model in df.groupby(by='Models ID'):
-    #     d_model = d_model[1].reindex(np.hstack(
-    #         (d_model[1].index.values[-5:],
-    #          d_model[1].index.values[:-5])))
-    #     # d_model = d_model.reset_index(drop=True)
-    #     for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
-    #         d_loss = d_model[d_model['Loss'] == loss]
-    #         idxs = d_loss['Hparams']
-    #         bs = []
-    #         for i, idx in enumerate(idxs):
-    #             b = int(idx.split('b=')[1])
-    #             bs.append(b)
-    #         bs = np.array(bs)
-    #         d_loss = d_loss.reset_index().drop('index', axis=1)
-    #         d_loss = d_loss.reindex(bs.argsort())
-    #         d_loss = d_loss.reset_index().drop('index', axis=1)
-    #         df_list.append(d_loss)
-    #
-    #
-    # df = pd.concat(df_list)
-    # df = df.reset_index().drop('index', axis=1)
-    # df.to_csv(join(root, 'all_models_results2.csv'))
     print("")
-
-
 
 
 
