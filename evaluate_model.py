@@ -119,53 +119,70 @@ def plot_all_loss(root):
         fig.savefig(join(root, f"{model_pair_dir}.pdf"))
         print("")
 
+def reorder_csv(root, b=None):
+    try:
+        acc_df = pd.read_csv(join(root, 'acc.csv'), index_col='Models')
+        nfr_df = pd.read_csv(join(root, 'nfr.csv'), index_col='Models')
+        pfr_df = pd.read_csv(join(root, 'pfr.csv'), index_col='Models')
+    except:
+        csv_path = join(root, 'all_models_results.csv')
 
-def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
-    df = pd.read_csv(join(root, 'all_models_results.csv'))
+        if os.name == 'nt':
+            # check if windows...
+            csv_path = csv_path.replace('\\', '/')
+        df = pd.read_csv(csv_path)
 
-    loss_list = df['Loss'].unique()
-    models_pair_list = df['Models ID'].sort_values().unique()
-    # sort_values -> NFR dal più piccolo al più grande
-    # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
-    # sort_index -> restore indexes, così ho i modelli in ordine
+        loss_list = df['Loss'].unique()
+        models_pair_list = df['Models ID'].sort_values().unique()
+        # sort_values -> NFR dal più piccolo al più grande
+        # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
+        # sort_index -> restore indexes, così ho i modelli in ordine
 
-    if b is None:
-        df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)'])
-        df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
-    else:
-        df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
+        if b is None:
+            df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)'])
+            df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
+        else:
+            df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
 
-    df.drop(['Hparams'], axis=1, inplace=True)
-    new_cols = ['old', 'new'] + list(loss_list)
-    acc_df = pd.DataFrame(columns=new_cols)
-    nfr_df = pd.DataFrame(columns=new_cols)
-    pfr_df = pd.DataFrame(columns=new_cols)
+        df.drop(['Hparams'], axis=1, inplace=True)
+        new_cols = ['old', 'new'] + list(loss_list)
+        acc_df = pd.DataFrame(columns=new_cols)
+        nfr_df = pd.DataFrame(columns=new_cols)
+        pfr_df = pd.DataFrame(columns=new_cols)
 
-    acc_df.index.name = 'Models'
-    nfr_df.index.name = 'Models'
-    pfr_df.index.name = 'Models'
+        acc_df.index.name = 'Models'
+        nfr_df.index.name = 'Models'
+        pfr_df.index.name = 'Models'
 
-    for model in models_pair_list:
-        acc_list = [df[df['Models ID'] == model]['Acc0'].iloc[0],
-                    df[df['Models ID'] == model]['Acc1'].iloc[0]]
-        nfr_list = [None,
-                    df[df['Models ID'] == model]['NFR1'].iloc[0]]
-        pfr_list = [None,
-                    df[df['Models ID'] == model]['PFR1'].iloc[0]]
-        for loss in loss_list:
-            acc_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['Acc(FT)'].item())
-            nfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['NFR(FT)'].item())
-            pfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['PFR(FT)'].item())
+        for model in models_pair_list:
+            acc_list = [df[df['Models ID'] == model]['Acc0'].iloc[0],
+                        df[df['Models ID'] == model]['Acc1'].iloc[0]]
+            nfr_list = [None,
+                        df[df['Models ID'] == model]['NFR1'].iloc[0]]
+            pfr_list = [None,
+                        df[df['Models ID'] == model]['PFR1'].iloc[0]]
+            for loss in loss_list:
+                acc_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['Acc(FT)'].item())
+                nfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['NFR(FT)'].item())
+                pfr_list.append(df[df['Models ID'] == model][df['Loss'] == loss]['PFR(FT)'].item())
 
-        acc_df.loc[model] = acc_list
-        nfr_df.loc[model] = nfr_list
-        pfr_df.loc[model] = pfr_list
+            acc_df.loc[model] = acc_list
+            nfr_df.loc[model] = nfr_list
+            pfr_df.loc[model] = pfr_list
 
-    acc_df.to_csv(join(root, 'acc.csv'))
-    nfr_df.to_csv(join(root, 'nfr.csv'))
-    pfr_df.to_csv(join(root, 'pfr.csv'))
+        acc_df.to_csv(join(root, 'acc.csv'))
+        nfr_df.to_csv(join(root, 'nfr.csv'))
+        pfr_df.to_csv(join(root, 'pfr.csv'))
 
-    for i, df_i in enumerate([acc_df, nfr_df, pfr_df]):
+    return acc_df, nfr_df, pfr_df
+
+def plot_results_over_time(root, root_adv, ax, row=0,
+                           b=None, adv_tr=False,
+                           losses=('PCT',)):
+    acc_df, nfr_df, pfr_df = reorder_csv(root, b=b)
+    rob_acc_df, rob_nfr_df, rob_pfr_df = reorder_csv(root_adv, b=b)
+
+    for i, df_i in enumerate([acc_df, nfr_df, rob_acc_df, rob_nfr_df]):
         # if i == 0:
         #     df_i[['old', 'new']].plot(ax=ax[i], style='o--')
         # else:
@@ -177,80 +194,99 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
         models_ids = df_i.index.to_numpy()
         new = df_i['new'].to_numpy()
         pct = df_i['PCT'].to_numpy()
-        # mixmse = df_i['MixMSE'].to_numpy()[:3]
-        # mixmsenf = df_i['MixMSE(NF)'].to_numpy()[:3]
+        mixmse = df_i['MixMSE'].to_numpy() \
+            if ('MixMSE' in df_i.columns) and ('MixMSE' in losses) else None
+        mixmsenf = df_i['MixMSE(NF)'].to_numpy() \
+            if ('MixMSE(NF)' in df_i.columns) and ('MixMSE(NF)' in losses) else None
 
         line = 'solid' if adv_tr else 'dashed'
         alpha = 0.6
         markersize = 6
         linewidth = 1
 
-        if not adv_tr:
-            ax[row, i].plot(new, color='gray', marker='o', linestyle='dotted',
+        # Plot clean
+        if adv_tr:
+            ax[row, i].plot(new, color='black', marker='o', linestyle='dotted',
                             label='baseline', alpha=alpha,
                             markersize=markersize, linewidth=linewidth)
         ax[row, i].plot(pct, color='green', marker='*', linestyle=line,
                         label='AT-PCT' if adv_tr else 'PCT', alpha=alpha,
                         markersize=markersize, linewidth=linewidth)
-        # ax[row, i].plot(mixmse, color='blue', marker='^', linestyle=line,
-        #                 label='AT-MixMSE' if adv_tr else 'MixMSE', alpha=alpha,
-        #                 markersize=markersize, linewidth=linewidth)
-        # ax[row, i].plot(mixmsenf, color='red', marker='v', linestyle=line,
-        #                 label='AT-MixMSE(NF)' if adv_tr else 'MixMSE(NF)', alpha=alpha,
-        #                 markersize=markersize, linewidth=linewidth)
+        if mixmse is not None:
+            ax[row, i].plot(mixmse, color='blue', marker='^', linestyle=line,
+                            label='AT-MixMSE' if adv_tr else 'MixMSE', alpha=alpha,
+                            markersize=markersize, linewidth=linewidth)
+        if mixmsenf is not None:
+            ax[row, i].plot(mixmsenf, color='red', marker='v', linestyle=line,
+                            label='AT-MixMSE(NF)' if adv_tr else 'MixMSE(NF)', alpha=alpha,
+                            markersize=markersize, linewidth=linewidth)
 
-        ax[row, i].set_xticks(range(len(models_ids)), models_ids, rotation=45)
-
-    titles = ['Accuracy', 'NFR', 'PFR']
-    titles = [f"{t} (%)" for t in titles]
-    for i in range(3):
-        ax[row, i].set_title(titles[i])
-        # ax[i].get_xaxis().set_visible(False)
-        # ax[i].set_xticks(list(np.arange(acc_df.shape[0])),
-        #                  rotation=45)
-
-        # if i == 0:
-        #     ax[row, i].set_ylim([0, 95])
-        # elif i == 1:
-        #     ax[row, i].set_ylim([0, 30])
-        # else:
-        #     ax[row, i].set_ylim([0, 90])
-
-    # fig.tight_layout()
-    # # fig.savefig(join(root, 'perf.pdf'))
-    # fig.show()
+        # ax[row, i].set_xticks(range(len(models_ids)), models_ids, rotation=45)
+        ax[row, i].set_xticks(range(len(models_ids)), [m.split('new-')[-1] for m in models_ids])
 
     print("")
 
 
 if __name__ == '__main__':
+    static_or_temporal = 'static'
 
-    root = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR'
-    root_clean = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR'
-    root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = root
-    root_advx_AT = f"{root_clean_AT}/advx_ft"
+    img_fname = f"{static_or_temporal}_cifar10_churn"
+
+    losses = ('PCT', 'MixMSE', 'MixMSE(NF)')
+
+    if static_or_temporal == 'temporal':
+        # Temporal
+        root = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR'
+        root_clean = 'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR'
+        root_advx = f"{root_clean}/advx_ft"
+        root_clean_AT = root
+        root_advx_AT = f"{root_clean_AT}/advx_ft"
+    else:
+        # Static
+        root = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+        root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+        root_advx = f"{root_clean}/advx_ft"
+        root_clean_AT = root
+        root_advx_AT = f"{root_clean_AT}/advx_ft"
+
 
     b = None
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500/advx_AT'
     # root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
 
     # for root_i in [root_clean, root_advx, root_clean_AT, root_advx_AT]:
-    #     performance_csv(root_i)
+        # performance_csv(root_i)
 
-    fig, ax = plt.subplots(2, 3, figsize=(15, 10))
-    plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
-    plot_results_over_time(root_clean_AT, ax=ax, row=0, adv_tr=True, b=b)
-    plot_results_over_time(root_advx, ax=ax, row=1, adv_tr=False, b=b)
-    plot_results_over_time(root_advx_AT, ax=ax, row=1, adv_tr=True, b=b)
+    fig, ax = plt.subplots(1, 4, figsize=(20, 5), squeeze=False)
+    plot_results_over_time(root_clean, root_advx, ax=ax, row=0,
+                           adv_tr=False, b=b, losses=losses)
+    plot_results_over_time(root_clean_AT, root_advx_AT, ax=ax, row=0,
+                           adv_tr=True, b=b, losses=losses)
 
-    ax[0, 0].set_ylabel('Clean data')
-    ax[1, 0].set_ylabel('Adversarial data')
+    # ax[0, 0].set_ylabel('Clean data')
+    # ax[1, 0].set_ylabel('Adversarial data')
+
     ax[-1, -1].legend()
+
+    clean_titles = ['Accuracy', 'NFR']
+    clean_titles = [f"{t} (%)" for t in clean_titles]
+    rob_titles = [f"Robust {t}" for t in clean_titles]
+    titles = clean_titles + rob_titles
+    for i in range(4):
+        ax[0, i].set_title(titles[i])
+        ax[0, i].set_xlabel('updates')
     fig.tight_layout()
-    fig.savefig(join(root, 'perf_AT.pdf'))
+    fig.savefig(join('images', f"{img_fname}.pdf"))
     fig.show()
 
+    # fig, ax = plt.subplots(2, 3, figsize=(15, 10))
+    # plot_results_over_time(root_clean, ax=ax, row=0, adv_tr=False, b=b)
+    # plot_results_over_time(root_clean_AT, ax=ax, row=0, adv_tr=True, b=b)
+    # plot_results_over_time(root_advx, ax=ax, row=1, adv_tr=False, b=b)
+    # plot_results_over_time(root_advx_AT, ax=ax, row=1, adv_tr=True, b=b)
+
+
+    print("")
     # df = pd.read_csv(join(root, 'all_models_results.csv'))
     #
     # df_list = []
