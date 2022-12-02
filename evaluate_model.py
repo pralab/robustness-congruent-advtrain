@@ -417,6 +417,11 @@ if __name__ == '__main__':
     acc_gain_matrix, nfr_matrix = data['acc'], data['nfr']
     rob_acc_gain_matrix, rob_nfr_matrix = data['rob_acc'], data['rob_nfr']
 
+    import seaborn as sns
+
+    sns.heatmap(acc_gain_matrix)
+    plt.show()
+
     print("")
 
 
