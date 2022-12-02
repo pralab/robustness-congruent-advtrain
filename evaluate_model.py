@@ -8,6 +8,7 @@ from utils.eval import compute_nflips
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
 import torch
+import seaborn as sns
 from itertools import product
 import pickle
 
@@ -414,8 +415,27 @@ if __name__ == '__main__':
     with open('results/perf_matrix.gz', 'rb') as f:
         data = pickle.load(f)
 
-    acc_gain_matrix, nfr_matrix = data['acc'], data['nfr']
-    rob_acc_gain_matrix, rob_nfr_matrix = data['rob_acc'], data['rob_nfr']
+    acc, nfr = data['acc'], data['nfr']
+    rob_acc, rob_nfr = data['rob_acc'], data['rob_nfr']
+
+    fig, ax = plt.subplots(2, 2, figsize=(10, 10), squeeze=False)
+    sns.heatmap(acc, annot=True, fmt='g', ax=ax[0, 0],
+                cmap='PiYG', cbar=False)
+    sns.heatmap(rob_acc, annot=True, fmt='g', ax=ax[0, 1],
+                cmap='PiYG', cbar=True)
+    sns.heatmap(nfr, annot=True, fmt='g', ax=ax[1, 0],
+                cmap='PiYG', cbar=False)
+    sns.heatmap(rob_nfr, annot=True, fmt='g', ax=ax[1, 1],
+                cmap='PiYG', cbar=True)
+
+    titles = ['Acc', 'Rob Acc', 'NFR', 'Rob NFR']
+    for i, row in enumerate(ax):
+        for j, ax_i in enumerate(row):
+            ax_i.set_title(titles[i])
+            ax_i.axis('off')
+
+
+    fig.show()
 
     import seaborn as sns
 
