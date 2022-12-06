@@ -11,7 +11,9 @@ import torch
 import seaborn as sns
 from itertools import product
 import pickle
+from pylatex import LongTable, MultiColumn
 
+pd.set_option('display.max_columns', None)
 
 def main():
 
@@ -238,6 +240,17 @@ def reorder_csv(root, b=None):
 
     return acc_df, nfr_df, pfr_df
 
+def sort_df(df, b = None):
+    if b is None:
+        # df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)']+other_cols)
+        # df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']+other_cols).sort_index()
+        df = df.sort_values(by='NFR(Sum)', ascending=True).drop_duplicates(
+            ['Loss', 'AT'])
+
+    else:
+        df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
+
+    return df
 
 def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
     df = pd.read_csv(join(root, 'all_models_results.csv'))
@@ -248,11 +261,7 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
     # drop_duplicates -> prende la prima occorrenza dei duplicati, NFR più piccolo quindi
     # sort_index -> restore indexes, così ho i modelli in ordine
 
-    if b is None:
-        df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)'])
-        df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']).sort_index()
-    else:
-        df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
+    df = sort_df(df, b=b)
 
     df.drop(['Hparams'], axis=1, inplace=True)
     new_cols = ['old', 'new'] + list(loss_list)
@@ -341,108 +350,156 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 
     print("")
 
-def compute_churn_matrix(model_ids = (1,2,3,4,5,6),
-                        path='results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500',
-                         advx=False):
+#
+# def table_model_results():
+#     root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+#     root_advx = f"{root_clean}/advx_ft"
+#     root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+#     root_advx_AT = f"{root_clean_AT}/advx_ft"
+#
+#     single_model_res_path = join('results/single_models_res')
+#     if not os.path.isdir(single_model_res_path):
+#         os.mkdir(single_model_res_path)
+#
+#     df = None
+#     df_clean = pd.read_csv(join(root_clean, 'all_models_results.csv'))
+#     df_advx = pd.read_csv(join(root_advx, 'all_models_results.csv'))
+#     df_clean_at = pd.read_csv(join(root_clean_AT, 'all_models_results.csv'))
+#     df_advx_at = pd.read_csv(join(root_advx_AT, 'all_models_results.csv'))
+#
+#     for i, df_i in enumerate([df_clean, df_advx, df_clean_at, df_advx_at]):
+#         df_i['AT'] = True if i > 1 else False
+#         df_i['ts_data'] = 'clean' if (i % 2) == 0 else 'advx'
+#         df = df_i if df is None else pd.concat([df, df_i])
+#         df.reset_index(inplace=True, drop=True)
+#
+#     df['NFR (Clean+Robust)'] = df[]
+#
+#     for models_id in df['Models ID'].unique():
+#         print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
+#         # models_id = df['Models ID'].unique()[3]
+#
+#         df_model = df.loc[df['Models ID'] == models_id]
+#         df_model.reset_index(inplace=True, drop=True)
+#
+#         df_model = sort_df(df_model, b=None, other_cols=['AT', 'ts_data'])
+#         df_model.drop(['Models ID'], axis=1, inplace=True)
+#
+#         model_results_df = pd.DataFrame(columns=['Acc', 'Rob Acc', 'NFR', 'Rob NFR'])#, 'Hparams'])
+#         model_results_df.index.name = 'model'
+#
+#         non_ft_df = df_model.drop_duplicates(['ts_data'])
+#         model_results_df.loc['old'] = [non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['Acc0'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['Acc0'].item(),
+#                                        None,
+#                                        None]
+#         model_results_df.loc['new'] = [non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['Acc1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['Acc1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['NFR1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['NFR1'].item()]
+#
+#         for at in [False, True]:
+#             for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+#                 loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
+#                 idx_name = loss if not at else f"{loss}-AT"
+#                 model_results_df.loc[idx_name] = [loss_df.loc[(loss_df['ts_data'] == 'clean')]['Acc(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'advx')]['Acc(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'clean')]['NFR(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'advx')]['NFR(FT)'].item()
+#                                                ]
+#         print(model_results_df)
+#         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"))
+#
+#
+#     print("")
 
-    # for model_id in model_ids:
-    #     model_name = MODEL_NAMES[model_id]
-    #     model = load_model(model_name, dataset='cifar10', threat_model='Linf')
 
-    if advx:
-        path = 'results/advx'
+def table_model_results():
+    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_advx = f"{root_clean}/advx_ft"
+    root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    root_advx_AT = f"{root_clean_AT}/advx_ft"
 
-    c = 0
-    correct_preds_matrix = None #np.empty(shape=())
-    new_correct = None
-    for i, model_id in enumerate(model_ids):
-        for root, dirs, files in os.walk(path):
-            if (f"old-{model_id}" in root) \
-                and (any('results_' in file_name for file_name in files) and ('advx' not in root)):
+    single_model_res_path = join('results/single_models_res')
+    if not os.path.isdir(single_model_res_path):
+        os.mkdir(single_model_res_path)
 
-                # res_list = [file_name for file_name in files if 'results_' in file_name]
-                # for res in res_list:
-                results_fname = next((file_name for file_name in files if 'results_' in file_name))
-                with open(os.path.join(root, results_fname), 'rb') as f:
-                    results = pickle.load(f)
-                old_correct = results['old_correct'].numpy()
-                print(f"{model_id} -> Old acc: {old_correct.mean()}")
-                if correct_preds_matrix is None:
-                    correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-                correct_preds_matrix[i, :] = old_correct
-                c += 1
-                break
+    df_clean = pd.read_csv(join(root_clean, 'all_models_results.csv'))
+    df_advx = pd.read_csv(join(root_advx, 'all_models_results.csv'))
+    df_clean.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
+    df_advx = df_advx[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
+        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
+                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
+    df = pd.concat([df_clean, df_advx], axis=1)
 
-    if c == 0:
-        for i, model_id in enumerate(model_ids):
-            for root, dirs, files in os.walk(path):
-                if ((MODEL_NAMES[model_id] in root) and ('advx' in root) and ('correct_preds.gz' in files)):
-                    with open(os.path.join(root, 'correct_preds.gz'), 'rb') as f:
-                        old_correct = pickle.load(f).numpy()
-                    print(f"{model_id} -> Old acc: {old_correct.mean()}")
-                    if correct_preds_matrix is None:
-                        correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-                    correct_preds_matrix[i, :] = old_correct
-                    c += 1
-                    break
-    assert c == len(model_ids)
+    df_clean_at = pd.read_csv(join(root_clean_AT, 'all_models_results.csv'))
+    df_advx_at = pd.read_csv(join(root_advx_AT, 'all_models_results.csv'))
+    df_clean_at.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
+    df_advx_at = df_advx_at[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
+        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
+                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
+    df_at = pd.concat([df_clean_at, df_advx_at], axis=1)
 
-    idxs = np.arange(len(model_ids))
+    df['AT'] = False
+    df_at['AT'] = True
+    df = pd.concat([df, df_at])
+    df.reset_index(inplace=True, drop=True)
 
-    models_acc_gain_matrix = np.empty(shape=(len(model_ids), len(model_ids)))
-    models_nfr_matrix = models_acc_gain_matrix.copy()
-    for i, j in product(idxs, idxs):
-        models_acc_gain_matrix[i, j] = (correct_preds_matrix[j, :].mean() - correct_preds_matrix[i, :].mean())*100
-        models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])*100
+    model_results_df_list = []
+    keys = []
+    for models_id in df['Models ID'].unique():
+        print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
+        # models_id = df['Models ID'].unique()[3]
+        keys.append(models_id)
 
-    return models_acc_gain_matrix, models_nfr_matrix
+        df_model = df.loc[df['Models ID'] == models_id]
+        df_model.drop(['Models ID'], axis=1, inplace=True)
 
+        df_model['NFR(Sum)'] = df_model['NFR(FT)'] + df_model['Rob NFR(FT)']
+        df_model = sort_df(df_model, b=None)
+        df_model.reset_index(inplace=True, drop=True)
 
+        model_results_df = pd.DataFrame(columns=['Acc', 'Rob Acc', 'NFR', 'Rob NFR', 'NFR (Sum)'])#, 'Hparams'])
+        model_results_df.index.name = 'model'
+
+        model_results_df.loc['old'] = [df_model['Acc0'][0],
+                                       df_model['Rob Acc0'][0],
+                                       None, None, None]
+        model_results_df.loc['new'] = [df_model['Acc1'][0],
+                                       df_model['Rob Acc1'][0],
+                                       df_model['NFR1'][0],
+                                       df_model['Rob NFR1'][0],
+                                       df_model['NFR1'][0] + df_model['Rob NFR1'][0]]
+
+        for at in [False, True]:
+            for loss in ['PCT', 'MixMSE']:#, 'MixMSE(NF)']:
+                loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
+                idx_name = loss if not at else f"{loss}-AT"
+                model_results_df.loc[idx_name] = [loss_df['Acc(FT)'].item(),
+                                                  loss_df['Rob Acc(FT)'].item(),
+                                                  loss_df['NFR(FT)'].item(),
+                                                  loss_df['Rob NFR(FT)'].item(),
+                                                  loss_df['NFR(FT)'].item() + loss_df['Rob NFR(FT)'].item()
+                                                  ]
+        print(model_results_df)
+        model_results_df_list.append(model_results_df)
+        model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
+                                decimal=',', float_format='%.2f')
+
+    model_results_df_list = pd.concat([model_results_df_list[i] for i in range(1, 7)],
+                                      keys=[keys[i] for i in range(1, 7)])
+    with open('latex_files/models_results.tex', 'w') as f:
+        f.write(model_results_df_list.to_latex(
+            na_rep='-', float_format="%.2f",
+            caption="Models results", label="tab:ft_results",
+            column_format="l|l|c c|c c|c|"
+        ))
+    print("")
 
 if __name__ == '__main__':
-    # acc_gain_matrix, nfr_matrix = compute_churn_matrix()
-    # rob_acc_gain_matrix, rob_nfr_matrix = compute_churn_matrix(advx=True)
 
-    # data = {'acc': acc_gain_matrix, 'nfr': nfr_matrix,
-    #         'rob_acc': acc_gain_matrix, 'rob_nfr': nfr_matrix,
-    #         'model_ids': (1,2,3,4,5,6),
-    #         'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
-    # data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
+    table_model_results()
 
-    # with open('results/perf_matrix.gz', 'wb') as f:
-    #     pickle.dump(data, f)
-
-    with open('results/perf_matrix.gz', 'rb') as f:
-        data = pickle.load(f)
-
-    acc, nfr = data['acc'], data['nfr']
-    rob_acc, rob_nfr = data['rob_acc'], data['rob_nfr']
-
-    fig, ax = plt.subplots(2, 2, figsize=(10, 10), squeeze=False)
-    sns.heatmap(acc, annot=True, fmt='g', ax=ax[0, 0],
-                cmap='PiYG', cbar=False)
-    sns.heatmap(rob_acc, annot=True, fmt='g', ax=ax[0, 1],
-                cmap='PiYG', cbar=True)
-    sns.heatmap(nfr, annot=True, fmt='g', ax=ax[1, 0],
-                cmap='PiYG', cbar=False)
-    sns.heatmap(rob_nfr, annot=True, fmt='g', ax=ax[1, 1],
-                cmap='PiYG', cbar=True)
-
-    titles = ['Acc', 'Rob Acc', 'NFR', 'Rob NFR']
-    for i, row in enumerate(ax):
-        for j, ax_i in enumerate(row):
-            ax_i.set_title(titles[i])
-            ax_i.axis('off')
-
-
-    fig.show()
-
-    import seaborn as sns
-
-    sns.heatmap(acc_gain_matrix)
-    plt.show()
-
-    print("")
 
 
 

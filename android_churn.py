@@ -155,7 +155,7 @@ def train_sequence_svm(results_path, train_size, test_size,
 def main_train_sequence_svm():
     C_list = [0.001, 0.01, 0.1, 1]
     max_iter = 1000
-    class_weight = None#'balanced'
+    class_weight = 'balanced'
     sample_weights = None
     overwrite = True
     test_size = 3
