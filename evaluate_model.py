@@ -470,9 +470,8 @@ def table_model_results():
                                        df_model['NFR1'][0],
                                        df_model['Rob NFR1'][0],
                                        df_model['NFR1'][0] + df_model['Rob NFR1'][0]]
-
-        for at in [False, True]:
-            for loss in ['PCT', 'MixMSE']:#, 'MixMSE(NF)']:
+        for loss in ['PCT', 'MixMSE']:  # , 'MixMSE(NF)']:
+            for at in [False, True]:
                 loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
                 idx_name = loss if not at else f"{loss}-AT"
                 model_results_df.loc[idx_name] = [loss_df['Acc(FT)'].item(),
