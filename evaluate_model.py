@@ -336,16 +336,19 @@ def compute_churn_matrix(model_ids = (1,2,3,4,5,6),
         models_acc_gain_matrix[i, j] = (correct_preds_matrix[j, :].mean() - correct_preds_matrix[i, :].mean())*100
         models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])*100
     
-    return models_acc_gain_matrix, models_nfr_matrix
+    accuracy_list = correct_preds_matrix.mean(axis=1)
+
+    return models_acc_gain_matrix, models_nfr_matrix, accuracy_list
 
 
 
 if __name__ == '__main__':
-    # acc_gain_matrix, nfr_matrix = compute_churn_matrix()
-    # rob_acc_gain_matrix, rob_nfr_matrix = compute_churn_matrix(advx=True)
+    # acc_gain_matrix, nfr_matrix, accs = compute_churn_matrix()
+    # rob_acc_gain_matrix, rob_nfr_matrix, rob_accs = compute_churn_matrix(advx=True)
 
-    # data = {'acc': acc_gain_matrix, 'nfr': nfr_matrix,
-    #         'rob_acc': acc_gain_matrix, 'rob_nfr': nfr_matrix,
+    # data = {'accs': accs, 'rob_accs': rob_accs,
+    #         'acc_diff': acc_gain_matrix, 'nfr': nfr_matrix,
+    #         'rob_acc_diff': rob_acc_gain_matrix, 'rob_nfr': rob_nfr_matrix,
     #         'model_ids': (1,2,3,4,5,6),
     #         'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
     # data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
