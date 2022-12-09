@@ -11,7 +11,17 @@ import torch
 import seaborn as sns
 from itertools import product
 import pickle
+import math
 from pylatex import LongTable, MultiColumn
+import matplotlib
+
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.size'] = 18
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+
 
 pd.set_option('display.max_columns', None)
 
@@ -446,6 +456,7 @@ def table_model_results():
     df.reset_index(inplace=True, drop=True)
 
     model_results_df_list = []
+    diff_model_res_list = []
     keys = []
     for models_id in df['Models ID'].unique():
         print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
@@ -483,22 +494,118 @@ def table_model_results():
         print(model_results_df)
         model_results_df_list.append(model_results_df)
         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
-                                decimal=',', float_format='%.2f')
+                                float_format='%.2f')
 
     model_results_df_list = pd.concat([model_results_df_list[i] for i in range(1, 7)],
                                       keys=[keys[i] for i in range(1, 7)])
-    with open('latex_files/models_results.tex', 'w') as f:
-        f.write(model_results_df_list.to_latex(
-            na_rep='-', float_format="%.2f",
+    latex_table(model_results_df_list, fout='latex_files/models_results.tex')
+
+
+def latex_table(df, diff=True, fout='latex_files/models_results.tex'):
+    model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
+
+    idxs_list = []
+    for model_pair in model_pairs:
+        df_m = df.loc[model_pair]
+        if diff:
+            df_m.iloc[2:, :] = df_m.iloc[2:, :] - df_m.iloc[1, :]
+        idxs = df_m.iloc[2:].idxmax()
+        idxs.iloc[2:] = df_m.iloc[2:, 2:].idxmin()
+        idxs_list.append(idxs)
+
+    df = df.applymap(lambda x: f"{x:.2f}" if not math.isnan(x) else "-")
+
+    for model_pair, idxs in zip(model_pairs, idxs_list):
+        df_m = df.loc[model_pair]
+        for col in df_m.columns:
+            value = df_m.loc[idxs.loc[col]][col]
+            df_m.loc[idxs.loc[col]][col] = r"\textbf{" + value + r"}"
+        new_index_name =r"\hline \multirow{6}{*}{\rotatebox[origin=c]{90}{" + model_pair.replace('_', r'\_') + r"}}"
+        df = df.rename(index={model_pair: new_index_name})
+
+    # df.rename(index={k:v in })
+
+    df_str = df.to_latex(
             caption="Models results", label="tab:ft_results",
-            column_format="l|l|c c|c c|c|"
-        ))
+            column_format="l|l|c c|c c|c|", escape=False
+        )
+    df_str = df_str.replace(r'\begin{tabular}', r'\resizebox{0.99\linewidth}{!}{\begin{tabular}')
+    df_str = df_str.replace(r'\end{tabular}', r'\hline \end{tabular}}')
+    with open(f'latex_files/models_results{"_diff" if diff else ""}.tex', 'w') as f:
+        f.write(df_str)
+
     print("")
+
+
+def plot_histogram(path='results/single_models_res'):
+    sel = ['Acc', 'Rob Acc', 'NFR', 'Rob NFR', 'NFR (Sum)']
+    # sel = ['NFR', 'Rob NFR']
+
+    model_list = []
+    keys = []
+    for file in os.listdir(path):
+        model_results_df = pd.read_csv(path + f"/{file}", index_col='model')
+        # model_results_df.iloc[2:] = model_results_df.iloc[2:] - model_results_df.iloc[1]
+        model_results_df = model_results_df.drop('old')#[sel]
+        # model_results_df['model'] = model_results_df.index
+        model_list.append(model_results_df)
+        keys.append(file)
+
+    model_list, keys = model_list[1:], keys[1:]
+    all_models_df = pd.concat(model_list, keys=keys)
+    max = all_models_df.max().max() + 5
+    min = all_models_df.min().min() - 5
+
+    n_rows, n_cols = 2, len(model_list)
+    size = 4
+    fig, ax = plt.subplots(n_rows, n_cols, figsize=(size*n_cols, size*n_rows), squeeze=False)
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            # idx = n_cols * i + j
+            model_df = model_list[j][sel[:2] if i == 0 else sel[2:]]
+            model_df.rename(
+                columns={k : v for k, v in zip(model_df.columns, ['Clean', 'Robust', 'Overall'])},
+                inplace=True)
+            model_df.transpose().plot.bar(ax=ax[i, j], rot=0,
+                                          legend=False)
+
+
+            # ax[i, j].set_ylim([min, max])
+            # ax[i, j].axhline(y=0, color='k', linestyle='--')
+    for j in range(n_cols):
+        title = keys[j]
+        title = title.replace('.csv', '').replace(
+            'old-', 'old: M').replace(
+            '_new-', ', new: M')
+        ax[0, j].set_title(title)
+    ax[0, 0].set_ylabel('Accuracy (%)')
+    ax[1, 0].set_ylabel('NFR (%)')
+
+    fig.tight_layout()
+    fig.show()
+
+    # create legend
+    h, l = ax[0, 0].get_legend_handles_labels()
+    legend_dict = dict(zip(l, h))
+    legend_fig = plt.figure(figsize=(10, 0.5))
+
+    legend_fig.legend(legend_dict.values(), legend_dict.keys(), loc='upper left',
+                      ncol=len(legend_dict.values()), frameon=False)
+    legend_fig.tight_layout()
+    legend_fig.show()
+
+    fig.savefig('images/ftuning_plots/ftuning_results.pdf')
+    legend_fig.savefig('images/ftuning_plots/legend_ftuning_results.pdf')
+
+    print("")
+
+
 
 if __name__ == '__main__':
 
     table_model_results()
-
+    # plot_histogram()
 
 
 
