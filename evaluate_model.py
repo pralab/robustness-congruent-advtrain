@@ -11,7 +11,17 @@ import torch
 import seaborn as sns
 from itertools import product
 import pickle
+import math
 from pylatex import LongTable, MultiColumn
+import matplotlib
+
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+matplotlib.rcParams['font.size'] = 18
+matplotlib.rcParams['font.family'] = 'STIXGeneral'
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
+
 
 pd.set_option('display.max_columns', None)
 
@@ -367,9 +377,74 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
     # fig.show()
 
     print("")
-    
 
-def table_model_results():
+#
+# def table_model_results():
+#     root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+#     root_advx = f"{root_clean}/advx_ft"
+#     root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+#     root_advx_AT = f"{root_clean_AT}/advx_ft"
+#
+#     single_model_res_path = join('results/single_models_res')
+#     if not os.path.isdir(single_model_res_path):
+#         os.mkdir(single_model_res_path)
+#
+#     df = None
+#     df_clean = pd.read_csv(join(root_clean, 'all_models_results.csv'))
+#     df_advx = pd.read_csv(join(root_advx, 'all_models_results.csv'))
+#     df_clean_at = pd.read_csv(join(root_clean_AT, 'all_models_results.csv'))
+#     df_advx_at = pd.read_csv(join(root_advx_AT, 'all_models_results.csv'))
+#
+#     for i, df_i in enumerate([df_clean, df_advx, df_clean_at, df_advx_at]):
+#         df_i['AT'] = True if i > 1 else False
+#         df_i['ts_data'] = 'clean' if (i % 2) == 0 else 'advx'
+#         df = df_i if df is None else pd.concat([df, df_i])
+#         df.reset_index(inplace=True, drop=True)
+#
+#     df['NFR (Clean+Robust)'] = df[]
+#
+#     for models_id in df['Models ID'].unique():
+#         print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
+#         # models_id = df['Models ID'].unique()[3]
+#
+#         df_model = df.loc[df['Models ID'] == models_id]
+#         df_model.reset_index(inplace=True, drop=True)
+#
+#         df_model = sort_df(df_model, b=None, other_cols=['AT', 'ts_data'])
+#         df_model.drop(['Models ID'], axis=1, inplace=True)
+#
+#         model_results_df = pd.DataFrame(columns=['Acc', 'Rob Acc', 'NFR', 'Rob NFR'])#, 'Hparams'])
+#         model_results_df.index.name = 'model'
+#
+#         non_ft_df = df_model.drop_duplicates(['ts_data'])
+#         model_results_df.loc['old'] = [non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['Acc0'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['Acc0'].item(),
+#                                        None,
+#                                        None]
+#         model_results_df.loc['new'] = [non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['Acc1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['Acc1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'clean']['NFR1'].item(),
+#                                        non_ft_df.loc[non_ft_df['ts_data'] == 'advx']['NFR1'].item()]
+#
+#         for at in [False, True]:
+#             for loss in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+#                 loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
+#                 idx_name = loss if not at else f"{loss}-AT"
+#                 model_results_df.loc[idx_name] = [loss_df.loc[(loss_df['ts_data'] == 'clean')]['Acc(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'advx')]['Acc(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'clean')]['NFR(FT)'].item(),
+#                                                loss_df.loc[(loss_df['ts_data'] == 'advx')]['NFR(FT)'].item()
+#                                                ]
+#         print(model_results_df)
+#         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"))
+#
+#
+#     print("")
+
+
+def table_model_results(model_sel=(1,3,5,6),
+                        losses=('PCT', 'MixMSE', 'MixMSE(NF)'),
+                        diff=False):
     root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
     root_advx = f"{root_clean}/advx_ft"
     root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
@@ -401,6 +476,7 @@ def table_model_results():
     df.reset_index(inplace=True, drop=True)
 
     model_results_df_list = []
+    diff_model_res_list = []
     keys = []
     for models_id in df['Models ID'].unique():
         print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
@@ -425,7 +501,7 @@ def table_model_results():
                                        df_model['NFR1'][0],
                                        df_model['Rob NFR1'][0],
                                        df_model['NFR1'][0] + df_model['Rob NFR1'][0]]
-        for loss in ['PCT', 'MixMSE']:  # , 'MixMSE(NF)']:
+        for loss in losses:
             for at in [False, True]:
                 loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
                 idx_name = loss if not at else f"{loss}-AT"
@@ -438,22 +514,144 @@ def table_model_results():
         print(model_results_df)
         model_results_df_list.append(model_results_df)
         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
-                                decimal=',', float_format='%.2f')
+                                float_format='%.2f')
 
-    model_results_df_list = pd.concat([model_results_df_list[i] for i in range(1, 7)],
-                                      keys=[keys[i] for i in range(1, 7)])
-    with open('latex_files/models_results.tex', 'w') as f:
-        f.write(model_results_df_list.to_latex(
-            na_rep='-', float_format="%.2f",
+    model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
+                                      keys=[keys[i] for i in model_sel])
+    latex_table(model_results_df_list, diff=diff)
+
+
+def latex_table(df, diff=False, fout='latex_files/models_results.tex'):
+    model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
+
+    idxs_best_list = []
+    idxs_list = []
+    idxs_at_list = []
+    for model_pair in model_pairs:
+        df_m = df.loc[model_pair]
+        idxs = df_m.iloc[1:].idxmax()
+        idxs.iloc[2:] = df_m.iloc[1:, 2:].idxmin()
+        idxs_best_list.append(idxs)
+        for i in range(2):
+            sel_loss = [2+i, 4+i, 6+i][:(df_m.index.shape[0] - 2)//2]
+            if diff:
+                df_m.iloc[sel_loss, :] = df_m.iloc[sel_loss, :] - df_m.iloc[1, :]
+            idxs = df_m.iloc[sel_loss].idxmax()
+            idxs.iloc[2:] = df_m.iloc[sel_loss, 2:].idxmin()
+            if i == 0:
+                idxs_list.append(idxs)
+            else:
+                idxs_at_list.append(idxs)
+
+    df = df.applymap(lambda x: f"{x:.2f}" if not math.isnan(x) else "-")
+
+    for model_pair, idxs, idxs_at, idxs_best in zip(model_pairs,
+                                                    idxs_list,
+                                                    idxs_at_list,
+                                                    idxs_best_list):
+        df_m = df.loc[model_pair]
+        for col in df_m.columns:
+            value = df_m.loc[idxs.loc[col]][col]
+            df_m.loc[idxs.loc[col]][col] = r"\textcolor{blue}{" + value + r"}"
+
+            value = df_m.loc[idxs_at.loc[col]][col]
+            df_m.loc[idxs_at.loc[col]][col] = r"\textcolor{red}{" + value + r"}"
+
+            value = df_m.loc[idxs_best.loc[col]][col]
+            df_m.loc[idxs_best.loc[col]][col] = r"\textbf{" + value + r"}"
+
+
+        new_index_name =r"\hline \multirow{6}{*}{\rotatebox[origin=c]{90}{" + model_pair.replace('_', r'\_') + r"}}"
+        df = df.rename(index={model_pair: new_index_name})
+
+    # df.rename(index={k:v in })
+
+    df_str = df.to_latex(
             caption="Models results", label="tab:ft_results",
-            column_format="l|l|c c|c c|c|"
-        ))
+            column_format="l|l|c c|c c|c|", escape=False
+        )
+    df_str = df_str.replace(r'\begin{tabular}', r'\resizebox{0.99\linewidth}{!}{\begin{tabular}')
+    df_str = df_str.replace(r'\end{tabular}', r'\hline \end{tabular}}')
+    with open(f'latex_files/models_results{"_diff" if diff else ""}.tex', 'w') as f:
+        f.write(df_str)
+
     print("")
 
-if __name__ == '__main__':
-    main_perf_csv()
-    # table_model_results()
 
+def plot_histogram(path='results/single_models_res'):
+    sel = ['Acc', 'Rob Acc', 'NFR', 'Rob NFR', 'NFR (Sum)']
+    # sel = ['NFR', 'Rob NFR']
+
+    model_list = []
+    keys = []
+    for file in os.listdir(path):
+        model_results_df = pd.read_csv(path + f"/{file}", index_col='model')
+        # model_results_df.iloc[2:] = model_results_df.iloc[2:] - model_results_df.iloc[1]
+        model_results_df = model_results_df.drop('old')#[sel]
+        # model_results_df['model'] = model_results_df.index
+        model_list.append(model_results_df)
+        keys.append(file)
+
+    model_list, keys = model_list[1:], keys[1:]
+    all_models_df = pd.concat(model_list, keys=keys)
+    max = all_models_df.max().max() + 5
+    min = all_models_df.min().min() - 5
+
+    n_rows, n_cols = 2, len(model_list)
+    size = 4
+    fig, ax = plt.subplots(n_rows, n_cols, figsize=(size*n_cols, size*n_rows), squeeze=False)
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            # idx = n_cols * i + j
+            model_df = model_list[j][sel[:2] if i == 0 else sel[2:]]
+            model_df.rename(
+                columns={k : v for k, v in zip(model_df.columns, ['Clean', 'Robust', 'Overall'])},
+                inplace=True)
+            model_df.transpose().plot.bar(ax=ax[i, j], rot=0,
+                                          legend=False)
+
+
+            # ax[i, j].set_ylim([min, max])
+            # ax[i, j].axhline(y=0, color='k', linestyle='--')
+    for j in range(n_cols):
+        title = keys[j]
+        title = title.replace('.csv', '').replace(
+            'old-', 'old: M').replace(
+            '_new-', ', new: M')
+        ax[0, j].set_title(title)
+    ax[0, 0].set_ylabel('Accuracy (%)')
+    ax[1, 0].set_ylabel('NFR (%)')
+
+    fig.tight_layout()
+    fig.show()
+
+    # create legend
+    h, l = ax[0, 0].get_legend_handles_labels()
+    legend_dict = dict(zip(l, h))
+    legend_fig = plt.figure(figsize=(10, 0.5))
+
+    legend_fig.legend(legend_dict.values(), legend_dict.keys(), loc='upper left',
+                      ncol=len(legend_dict.values()), frameon=False)
+    legend_fig.tight_layout()
+    legend_fig.show()
+
+    fig.savefig('images/ftuning_plots/ftuning_results.pdf')
+    legend_fig.savefig('images/ftuning_plots/legend_ftuning_results.pdf')
+
+    print("")
+
+
+
+if __name__ == '__main__':
+
+    # model_sel = tuple(range(1, 7))
+    model_sel = (1, 3, 5, 6)
+
+    losses = ('PCT', 'MixMSE')#, 'MixMSE(NF)')
+    table_model_results(model_sel=model_sel, losses=losses, diff=False)
+    table_model_results(model_sel=model_sel, losses=losses, diff=True)
+    # plot_histogram()
 
 
 
