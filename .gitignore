@@ -12,3 +12,4 @@ __pycache__
 *.out
 
 /churn/
+/latex_files/
