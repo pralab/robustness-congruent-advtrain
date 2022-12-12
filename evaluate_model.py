@@ -424,7 +424,9 @@ def plot_results_over_time(root, ax, row, adv_tr=False, b=None):
 #     print("")
 
 
-def table_model_results():
+def table_model_results(model_sel=(1,3,5,6),
+                        losses=('PCT', 'MixMSE', 'MixMSE(NF)'),
+                        diff=False):
     root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
     root_advx = f"{root_clean}/advx_ft"
     root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
@@ -481,7 +483,7 @@ def table_model_results():
                                        df_model['NFR1'][0],
                                        df_model['Rob NFR1'][0],
                                        df_model['NFR1'][0] + df_model['Rob NFR1'][0]]
-        for loss in ['PCT', 'MixMSE']:  # , 'MixMSE(NF)']:
+        for loss in losses:
             for at in [False, True]:
                 loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
                 idx_name = loss if not at else f"{loss}-AT"
@@ -496,30 +498,51 @@ def table_model_results():
         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
                                 float_format='%.2f')
 
-    model_results_df_list = pd.concat([model_results_df_list[i] for i in range(1, 7)],
-                                      keys=[keys[i] for i in range(1, 7)])
-    latex_table(model_results_df_list, fout='latex_files/models_results.tex')
+    model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
+                                      keys=[keys[i] for i in model_sel])
+    latex_table(model_results_df_list, diff=diff)
 
 
-def latex_table(df, diff=True, fout='latex_files/models_results.tex'):
+def latex_table(df, diff=False, fout='latex_files/models_results.tex'):
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
 
+    idxs_best_list = []
     idxs_list = []
+    idxs_at_list = []
     for model_pair in model_pairs:
         df_m = df.loc[model_pair]
-        if diff:
-            df_m.iloc[2:, :] = df_m.iloc[2:, :] - df_m.iloc[1, :]
-        idxs = df_m.iloc[2:].idxmax()
-        idxs.iloc[2:] = df_m.iloc[2:, 2:].idxmin()
-        idxs_list.append(idxs)
+        idxs = df_m.iloc[1:].idxmax()
+        idxs.iloc[2:] = df_m.iloc[1:, 2:].idxmin()
+        idxs_best_list.append(idxs)
+        for i in range(2):
+            sel_loss = [2+i, 4+i, 6+i][:(df_m.index.shape[0] - 2)//2]
+            if diff:
+                df_m.iloc[sel_loss, :] = df_m.iloc[sel_loss, :] - df_m.iloc[1, :]
+            idxs = df_m.iloc[sel_loss].idxmax()
+            idxs.iloc[2:] = df_m.iloc[sel_loss, 2:].idxmin()
+            if i == 0:
+                idxs_list.append(idxs)
+            else:
+                idxs_at_list.append(idxs)
 
     df = df.applymap(lambda x: f"{x:.2f}" if not math.isnan(x) else "-")
 
-    for model_pair, idxs in zip(model_pairs, idxs_list):
+    for model_pair, idxs, idxs_at, idxs_best in zip(model_pairs,
+                                                    idxs_list,
+                                                    idxs_at_list,
+                                                    idxs_best_list):
         df_m = df.loc[model_pair]
         for col in df_m.columns:
             value = df_m.loc[idxs.loc[col]][col]
-            df_m.loc[idxs.loc[col]][col] = r"\textbf{" + value + r"}"
+            df_m.loc[idxs.loc[col]][col] = r"\textcolor{blue}{" + value + r"}"
+
+            value = df_m.loc[idxs_at.loc[col]][col]
+            df_m.loc[idxs_at.loc[col]][col] = r"\textcolor{red}{" + value + r"}"
+
+            value = df_m.loc[idxs_best.loc[col]][col]
+            df_m.loc[idxs_best.loc[col]][col] = r"\textbf{" + value + r"}"
+
+
         new_index_name =r"\hline \multirow{6}{*}{\rotatebox[origin=c]{90}{" + model_pair.replace('_', r'\_') + r"}}"
         df = df.rename(index={model_pair: new_index_name})
 
@@ -604,7 +627,12 @@ def plot_histogram(path='results/single_models_res'):
 
 if __name__ == '__main__':
 
-    table_model_results()
+    # model_sel = tuple(range(1, 7))
+    model_sel = (1, 3, 5, 6)
+
+    losses = ('PCT', 'MixMSE')#, 'MixMSE(NF)')
+    table_model_results(model_sel=model_sel, losses=losses, diff=False)
+    table_model_results(model_sel=model_sel, losses=losses, diff=True)
     # plot_histogram()
 
 
