@@ -97,6 +97,12 @@ def compute_pflips(old_preds, new_preds, indexes=False):
     pf_idxs = ((~old_preds) & new_preds)
     return pf_idxs if indexes else pf_idxs.mean()
 
+def compute_common_nflips(clean_nf_idxs, advx_nf_idxs):
+    only_rob_nfr = ((~clean_nf_idxs) & advx_nf_idxs).mean()
+    only_acc_nfr = ((clean_nf_idxs) & ~advx_nf_idxs).mean()
+    common_nfr = ((clean_nf_idxs) & advx_nf_idxs).mean()
+    return only_rob_nfr, only_acc_nfr, common_nfr
+
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     model = model.to(device)
     model.eval()
