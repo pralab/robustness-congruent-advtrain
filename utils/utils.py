@@ -37,6 +37,22 @@ MODEL_NAMES = ['Standard',
 ]
 
 
+MODEL_NAMES_SHORT = ['Std.',
+'Engstrom',
+'Rice',
+'Zhang',
+'Hendrycks',
+'Rade',
+'Addep.',
+'Carmon',
+'Kang',
+'Gowal2020',
+'Gowal2021'
+]
+
+MODEL_NAMES_LONG_SHORT_DICT = {k: v for k, v in zip(MODEL_NAMES,
+                                                    MODEL_NAMES_SHORT)}
+
 # MODEL_NAMES = ['Standard', #81
 # 'Engstrom2019Robustness', #53
 # 'Rice2020Overfitting', #44

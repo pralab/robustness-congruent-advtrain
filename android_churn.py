@@ -10,6 +10,7 @@ from sklearn.metrics import precision_recall_fscore_support, precision_score, re
 
 import matplotlib.pyplot as plt
 
+
 def ds_stack(X: list, y:list,
              start: int = 0, n_months: int = 12):
     X_stack = vstack(X[start: start + n_months])
@@ -31,10 +32,14 @@ def ds_stack(X: list, y:list,
 
     return X_stack, y_stack, idxs
 
+
 def ds_unstack(X: csr_matrix, y: np.ndarray, idxs: list):
     X_unstack = [X[0 if i == 0 else idxs[i-1]: idxs[i]] for i in range(len(idxs))]
     y_unstack = np.split(y, idxs)[:-1]
     return X_unstack, y_unstack
+
+
+
 
 if __name__ == "__main__":
     C_list = [0.001, 0.01, 0.1, 1]
@@ -42,6 +47,7 @@ if __name__ == "__main__":
     sample_weights = None
     test_size = 3
     train_size = 12
+    max_iter = 1000
 
     fname = "results_prova"
     results_path = f"results/android/{fname}.pkl"
@@ -72,13 +78,16 @@ if __name__ == "__main__":
             nfrs_pos, pfrs_pos = [], []
             nfrs_neg, pfrs_neg = [], []
 
-            n_updates = len(X_tests) - 15
+            n_updates = len(X) - train_size - test_size
             for i in range(n_updates):
-                print(f"> M{i} ({i}/{n_updates})")
+                print(f"\n> M{i}/{n_updates}")
 
-                X_train_i, y_train_i = ds_stack(X, y, start=0, n_months=train_size)
-
-                clf = LinearSVC(C=C, class_weight=class_weight)
+                # Obtain train window
+                X_train_i, y_train_i, train_idxs = ds_stack(X, y, start=i, n_months=train_size)
+                print(f"Train months: {len(train_idxs)}, N samples: {X_train_i.shape[0]}")
+                clf = LinearSVC(C=C,
+                                class_weight=class_weight,
+                                max_iter=max_iter)
                 clf.fit(X_train_i,
                         y_train_i,
                         sample_weight=sample_weights,
@@ -88,9 +97,6 @@ if __name__ == "__main__":
                 # preds_tr = clf.predict(X_train_i)
                 # sample_weights = np.ones(preds_tr.shape)
                 # sample_weights[preds_tr == y_train_i] = 2
-
-                X_test_i = vstack((X_tests[i], X_tests[i+1]))
-                y_test_i = np.hstack((y_tests[i], y_tests[i+1]))
 
                 X_test_i, y_test_i, test_idxs = ds_stack(X, y,
                                                          start=train_size + i,
