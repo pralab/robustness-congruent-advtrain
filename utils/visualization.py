@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import torch
 import math
+import pickle
 
 class InvNormalize(Normalize):
     def __init__(self, normalizer):
@@ -118,3 +119,58 @@ def plot_loss(loss, ax, window=20):
     loss_df.plot(ax=ax)
     ax.legend(fontsize=15)
     ax.set_xlabel('iterations')
+
+
+
+###############################
+# ANDROID
+###############################
+
+def plot_android_result(result, ax, row=0):
+    ax[row, 0].plot(result['f1s'], color='blue', marker='o', label='F1')
+    ax[row, 0].plot(result['precs'], color='green', marker='*', label='Precision')
+    ax[row, 0].plot(result['recs'], color='red', marker='s', label='Recall')
+
+    ax[row, 1].plot(result['nfrs_pos'], color='red', marker='v', label='NFR-mw')
+    ax[row, 1].plot(result['nfrs_neg'], color='green', marker='^', label='NFR-gw')
+
+    # ax[row, 2].plot(result['pfrs_pos'], color='red', marker='>', label='PFR-mw')
+    # ax[row, 2].plot(result['pfrs_neg'], color='green', marker='<', label='PFR-gw')
+    # ax[row, 0].set_ylabel(f"C = {result['C']}")
+
+    # titles = ['Performances (%)',
+    #           'Negative Flip Rate (%)',
+    #           'Positive Flip Rate (%)']
+    titles = ['Performances (%)',
+              'Negative Flip Rate (%)']
+
+    sw = result['sample_weights'] if result['sample_weights'] is not None else 'None'
+    ax[row, 0].set_ylabel(f'sample weight = {sw}')
+    for i, title in enumerate(titles):
+        ax[row, i].set_title(title)
+        ax[row, i].set_xlabel('Updates')
+        ax[row, i].set_xticks(np.arange(start=0, stop=len(result['f1s']), step=3))
+        ax[row, i].legend()
+
+
+def plot_results_sequence_svm(results_path,
+                              fig_fname):
+
+    with open(results_path, 'rb') as f:
+        results = pickle.load(f)
+
+    # for res in results:
+    #     if res['C'] == 0.01:
+    #         result = res
+    #         break
+
+    fig, ax = plt.subplots(len(results), 2, figsize=(10, 5 * len(results)))
+    for row, result in enumerate(results):
+        plot_android_result(result, ax, row)
+
+    # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
+    # plot_android_result(result, ax)
+
+    fig.tight_layout()
+    fig.show()
+    fig.savefig(f"images/android/{fig_fname}.pdf")
