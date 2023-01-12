@@ -126,13 +126,16 @@ def plot_loss(loss, ax, window=20):
 # ANDROID
 ###############################
 
-def plot_android_result(result, ax, row=0):
-    ax[row, 0].plot(result['f1s'], color='blue', marker='o', label='F1')
-    ax[row, 0].plot(result['precs'], color='green', marker='*', label='Precision')
-    ax[row, 0].plot(result['recs'], color='red', marker='s', label='Recall')
+def plot_android_result(result, ax, i=0):
+    ax[0, i].plot(result['f1s'], color='blue', marker='o', label='F1')
+    ax[0, i].plot(result['precs'], color='green', marker='*', label='Precision')
+    ax[0, i].plot(result['recs'], color='red', marker='s', label='Recall')
 
-    ax[row, 1].plot(result['nfrs_pos'], color='red', marker='v', label='NFR-mw')
-    ax[row, 1].plot(result['nfrs_neg'], color='green', marker='^', label='NFR-gw')
+    ax[1, i].plot(result['nfrs_pos'], color='red', marker='v', label='NFR-mw')
+    ax[1, i].plot(result['nfrs_neg'], color='green', marker='^', label='NFR-gw')
+    sum = [pos + neg for pos, neg in list(zip(result['nfrs_pos'], result['nfrs_neg'])) if pos is not None]
+    sum = [None] + sum
+    ax[1, i].plot(sum, color='blue', linestyle='dashed', marker='+', label='NFR-sum')
 
     # ax[row, 2].plot(result['pfrs_pos'], color='red', marker='>', label='PFR-mw')
     # ax[row, 2].plot(result['pfrs_neg'], color='green', marker='<', label='PFR-gw')
@@ -145,12 +148,15 @@ def plot_android_result(result, ax, row=0):
               'Negative Flip Rate (%)']
 
     sw = result['sample_weights'] if result['sample_weights'] is not None else 'None'
-    ax[row, 0].set_ylabel(f'sample weight = {sw}')
-    for i, title in enumerate(titles):
-        ax[row, i].set_title(title)
-        ax[row, i].set_xlabel('Updates')
-        ax[row, i].set_xticks(np.arange(start=0, stop=len(result['f1s']), step=3))
-        ax[row, i].legend()
+    for j, title in enumerate(titles):
+        ax[j, 0].set_ylabel(title)
+        ax[j, i].set_xlabel('Updates')
+        ax[j, i].set_xticks(np.arange(start=0, stop=len(result['f1s']), step=3))
+        ax[j, i].legend()
+
+    ax[1, i].set_ylim(0, 5)
+    ax[0, i].set_ylim(60, 95)
+    ax[0, i].set_title(f'sample weight = {sw}')
 
 
 def plot_results_sequence_svm(results_path,
@@ -164,9 +170,11 @@ def plot_results_sequence_svm(results_path,
     #         result = res
     #         break
 
-    fig, ax = plt.subplots(len(results), 2, figsize=(10, 5 * len(results)))
-    for row, result in enumerate(results):
-        plot_android_result(result, ax, row)
+    fig, ax = plt.subplots(2, len(results),
+                           figsize=(5 * len(results), 10),
+                           squeeze=False)
+    for i, result in enumerate(results):
+        plot_android_result(result, ax, i)
 
     # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
     # plot_android_result(result, ax)

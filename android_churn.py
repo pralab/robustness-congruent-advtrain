@@ -14,31 +14,37 @@ import matplotlib.pyplot as plt
 
 
 def main_train_sequence_svm():
-    C_list = [0.01]
+    C = 0.01
     max_iter = 1000
     class_weight = 'balanced'
-    # sample_weight_list = [None, 2, 5, 10, 20, 50, 100]
-    sample_weight_list = [5]
+    sample_weight_list = [None, 2, 5, 10, 100, 1000]
+    # sample_weight_list = [5]
     overwrite = True
-    test_size = 3
+    test_size = 5
     train_size = 12
     n_updates = 10
+    temporal_weight = True
 
-    fname = f"results_cw-{class_weight}_tr-{train_size}_ts-{test_size}_C-{C_list}"
-    results_path = f"results/android/{fname}.pkl"
-    fig_fname = 'android_temporal_churn'
+    for C in [0.001, 0.01, 0.1, 1]:
+        for temporal_weight in [False, True]:
+            fname = f"results_temporal-{temporal_weight}_cw-{class_weight}_tr-{train_size}_ts-{test_size}_C-{C}"
+            # fname = "results_cw-balanced_tr-12_ts-3_C-[0.01]"
+            results_path = f"results/android/new/{fname}.pkl"
+            fig_fname = fname
 
-    # # if not os.path.exists(results_path) or overwrite:
-    # train_sequence_svm(results_path=results_path,
-    #                    train_size=train_size,
-    #                    test_size=test_size,
-    #                    n_updates=n_updates,
-    #                    C_list=C_list, class_weight=class_weight,
-    #                    sample_weight_list=sample_weight_list, max_iter=max_iter,
-    #                    overwrite=overwrite)
+            # # if not os.path.exists(results_path) or overwrite:
+            train_sequence_svm(results_path=results_path,
+                               train_size=train_size,
+                               test_size=test_size,
+                               n_updates=n_updates,
+                               C=C, class_weight=class_weight,
+                               sample_weight_list=sample_weight_list,
+                               temporal_weight=temporal_weight,
+                               max_iter=max_iter,
+                               overwrite=overwrite)
 
-    plot_results_sequence_svm(results_path=results_path,
-                              fig_fname=fig_fname)
+            plot_results_sequence_svm(results_path=results_path,
+                                      fig_fname=fig_fname)
 
 
 

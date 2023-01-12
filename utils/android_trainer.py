@@ -11,13 +11,13 @@ from sklearn.metrics import precision_recall_fscore_support, precision_score, re
 
 
 def train_sequence_svm(results_path, train_size, test_size, n_updates=None,
-                       C_list=(0.001, 0.01, 0.1),
+                       C=1,
                        class_weight='balanced',
                        sample_weight_list=None,
+                       temporal_weight=False,
                        max_iter=1000,
                        overwrite=False
                        ):
-    C = C_list[0]
 
     with open(os.path.join(DS_PATH, 'drebin_xyt.pkl'), 'rb') as f:
         ds = pickle.load(f)
@@ -53,7 +53,9 @@ def train_sequence_svm(results_path, train_size, test_size, n_updates=None,
             print(f"\n> M{i}/{n_updates}")
 
             # Obtain train window
-            X_train_i, y_train_i, train_idxs = ds_stack(X, y, start=i, n_months=train_size)
+            X_train_i, y_train_i, train_idxs = ds_stack(X, y,
+                                                        start=i,
+                                                        n_months=train_size)
 
 
             # Churn-aware filter
@@ -62,7 +64,13 @@ def train_sequence_svm(results_path, train_size, test_size, n_updates=None,
                 preds_tr = clf.predict(X_train_i)
                 sample_weights = np.ones(preds_tr.shape)
                 sample_weights[preds_tr == y_train_i] = sample_weight
-                sample_weights[train_idxs[-2]:] = 1
+                # sample_weights[train_idxs[-2]:] = 1
+            else:
+                sample_weights = np.ones(X_train_i.shape[0])
+
+            if temporal_weight:
+                temporal_weights = np.linspace(0.1, 1, num=sample_weights.shape[0])
+                sample_weights = sample_weights * temporal_weights
 
             print(f"Train months: {len(train_idxs)}, N samples: {X_train_i.shape[0]}")
             clf = LinearSVC(C=C,
