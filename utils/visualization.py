@@ -127,15 +127,17 @@ def plot_loss(loss, ax, window=20):
 ###############################
 
 def plot_android_result(result, ax, i=0):
-    ax[0, i].plot(result['f1s'], color='blue', marker='o', label='F1')
-    ax[0, i].plot(result['precs'], color='green', marker='*', label='Precision')
-    ax[0, i].plot(result['recs'], color='red', marker='s', label='Recall')
+    # ax[0, i].plot(result['f1'], color='blue', marker='o', label='F1')
+    # ax[0, i].plot(result['prec'], color='green', marker='*', label='Precision')
+    # ax[0, i].plot(result['rec'], color='red', marker='s', label='Recall')
+    ax[0, i].plot(result['tpr'], color='blue', marker='o', label='TPR')
+    ax[0, i].plot(result['old_tpr'], color='blue', marker='o', linestyle='dashed', label='old-TPR')
+    ax[0, i].plot(result['fpr'], color='red', marker='*', label='FPR')
+    ax[0, i].plot(result['old_fpr'], color='red', marker='*', linestyle='dashed', label='old-FPR')
 
-    ax[1, i].plot(result['nfrs_pos'], color='red', marker='v', label='NFR-mw')
-    ax[1, i].plot(result['nfrs_neg'], color='green', marker='^', label='NFR-gw')
-    sum = [pos + neg for pos, neg in list(zip(result['nfrs_pos'], result['nfrs_neg'])) if pos is not None]
-    sum = [None] + sum
-    ax[1, i].plot(sum, color='blue', linestyle='dashed', marker='+', label='NFR-sum')
+    ax[1, i].plot(result['nfr_pos'], color='red', marker='v', label='NFR-mw')
+    ax[1, i].plot(result['nfr_neg'], color='green', marker='^', label='NFR-gw')
+    ax[1, i].plot(result['nfr_tot'], color='blue', linestyle='dashed', marker='+', label='NFR-tot')
 
     # ax[row, 2].plot(result['pfrs_pos'], color='red', marker='>', label='PFR-mw')
     # ax[row, 2].plot(result['pfrs_neg'], color='green', marker='<', label='PFR-gw')
@@ -147,16 +149,16 @@ def plot_android_result(result, ax, i=0):
     titles = ['Performances (%)',
               'Negative Flip Rate (%)']
 
-    sw = result['sample_weights'] if result['sample_weights'] is not None else 'None'
+    sw = result['sample_weight'] if result['sample_weight'] is not None else 'None'
     for j, title in enumerate(titles):
         ax[j, 0].set_ylabel(title)
         ax[j, i].set_xlabel('Updates')
-        ax[j, i].set_xticks(np.arange(start=0, stop=len(result['f1s']), step=3))
+        ax[j, i].set_xticks(np.arange(start=0, stop=len(result['f1']), step=3))
         ax[j, i].legend()
 
-    ax[1, i].set_ylim(0, 5)
-    ax[0, i].set_ylim(60, 95)
     ax[0, i].set_title(f'sample weight = {sw}')
+    ax[0, i].set_ylim(0, 1)
+    ax[1, i].set_ylim(0, 0.1)
 
 
 def plot_results_sequence_svm(results_path,
@@ -179,6 +181,8 @@ def plot_results_sequence_svm(results_path,
     # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
     # plot_android_result(result, ax)
 
+
+    fig.suptitle(fig_fname)
     fig.tight_layout()
     fig.show()
     fig.savefig(f"images/android/{fig_fname}.pdf")
