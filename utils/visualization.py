@@ -126,13 +126,13 @@ def plot_loss(loss, ax, window=20):
 # ANDROID
 ###############################
 
-def plot_android_result(result, ax, i=0):
+def plot_results_android(result, ax, i=0):
     # ax[0, i].plot(result['f1'], color='blue', marker='o', label='F1')
     # ax[0, i].plot(result['prec'], color='green', marker='*', label='Precision')
     # ax[0, i].plot(result['rec'], color='red', marker='s', label='Recall')
     ax[0, i].plot(result['tpr'], color='blue', marker='o', label='TPR')
-    ax[0, i].plot(result['old_tpr'], color='blue', marker='o', linestyle='dashed', label='old-TPR')
-    ax[0, i].plot(result['fpr'], color='red', marker='*', label='FPR')
+    ax[0, i].plot(result['old_tpr'], color='blue', marker='*', linestyle='dashed', label='old-TPR')
+    ax[0, i].plot(result['fpr'], color='red', marker='o', label='FPR')
     ax[0, i].plot(result['old_fpr'], color='red', marker='*', linestyle='dashed', label='old-FPR')
 
     ax[1, i].plot(result['nfr_pos'], color='red', marker='v', label='NFR-mw')
@@ -161,8 +161,9 @@ def plot_android_result(result, ax, i=0):
     ax[1, i].set_ylim(0, 0.1)
 
 
-def plot_results_sequence_svm(results_path,
-                              fig_fname):
+def plot_sequence_results_android(results_path,
+                              fig_fname,
+                              title=None):
 
     with open(results_path, 'rb') as f:
         results = pickle.load(f)
@@ -176,13 +177,13 @@ def plot_results_sequence_svm(results_path,
                            figsize=(5 * len(results), 10),
                            squeeze=False)
     for i, result in enumerate(results):
-        plot_android_result(result, ax, i)
+        plot_results_android(result, ax, i)
 
     # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
     # plot_android_result(result, ax)
 
-
-    fig.suptitle(fig_fname)
+    title = fig_fname if title is None else title
+    fig.suptitle(title)
     fig.tight_layout()
     fig.show()
     fig.savefig(f"images/android/{fig_fname}.pdf")

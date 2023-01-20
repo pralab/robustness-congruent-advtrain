@@ -1,4 +1,5 @@
 from sklearn.svm import LinearSVC
+from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import os
 from utils.load_android_features import DS_PATH, generate_random_temporal_features
@@ -11,11 +12,13 @@ from scipy.sparse import vstack, csr_matrix
 from collections import OrderedDict
 
 class AndroidTemporalTrainer:
-    def __init__(self, results_path,
+    def __init__(self,
+                 clf_info,
+                 results_path,
                  train_size,
                  test_size,
                  val_size=0,
-                 fpr=0.01,
+                 max_fpr=0.01,
                  n_updates=None,
                  C=1,
                  class_weight='balanced',
@@ -32,11 +35,12 @@ class AndroidTemporalTrainer:
             hp_dict[key] = eval(key)
         self.hp_dict = hp_dict
 
+        self.clf_info = clf_info
         self.results_path = results_path
         self.train_size = train_size
         self.test_size = test_size
         self.val_size = val_size
-        self.fpr = fpr
+        self.max_fpr = max_fpr
         self.n_updates = n_updates
         self.C = C
         self.class_weight = class_weight
@@ -68,20 +72,26 @@ class AndroidTemporalTrainer:
         return X, y
 
     def reset_classifier(self):
-        self._clf = LinearSVC(C=self.C,
-                        class_weight=self.class_weight,
-                        max_iter=self.max_iter)
+        if self.clf_info['clf_name'] == 'svm':
+            self._clf = LinearSVC(C=self.clf_info['C'],
+                            class_weight=self.class_weight,
+                            max_iter=self.clf_info['max_iter'])
+        elif self.clf_info['clf_name'] == 'rf':
+            self._clf = RandomForestClassifier(
+                n_estimators=self.clf_info['n_estimators'],
+                max_depth=self.clf_info['max_depth'])
 
     def adjust_clf_threshold(self, X_val, y_val):
-        threshold = adjust_threshold(self._clf, X_val, y_val, self.fpr)
-
-        self._clf.intercept_[0] = self._clf.intercept_[0] - threshold
-
+        if self.clf_info['clf_name'] == 'svm':
+            threshold = adjust_threshold(self._clf, X_val, y_val, self.max_fpr)
+            self._clf.intercept_[0] = self._clf.intercept_[0] - threshold
+        elif self.clf_info['clf_name'] == 'rf':
+            print("")
         # import matplotlib.pyplot as plt
         # plt.plot(fpr, tpr)
         # plt.axvline(x=fpr[idx])
         # plt.show()
-        return threshold
+        return
 
     def reset_metrics(self):
         self.metrics = {}
@@ -107,8 +117,7 @@ class AndroidTemporalTrainer:
         #todo: capire come rendere più parametrico per scorrere su altri parametri
         results = []
         for row, sample_weight_k in enumerate(self.sample_weight):
-            t = f" sample_weight={sample_weight_k} "
-            print(f"{t:#^40}")
+            print(f"> sample_weight = {sample_weight_k}")
 
             self.train_sequence(X, y, sample_weight=sample_weight_k)
             self.evaluate_sequence(X, y)
@@ -131,7 +140,7 @@ class AndroidTemporalTrainer:
 
         # Iterate over the updates
         for i in range(self.n_updates):
-            print(f"\n> M{i}/{self.n_updates}")
+            # print(f"\n> M{i}/{self.n_updates}")
 
             ############################
             # DATA
@@ -155,7 +164,7 @@ class AndroidTemporalTrainer:
             # Churn-aware filter: it computes sample weights only if a previous classifier exists
             sample_weights = self.churn_aware_filter(sample_weight, X_train_i, y_train_i)
 
-            print(f"Train months: {len(train_idxs)}, N samples: {X_train_i.shape[0]}")
+            # print(f"Train months: {len(train_idxs)}, N samples: {X_train_i.shape[0]}")
             # todo: parametric clf type
             self.reset_classifier() #reset self._clf
             self._clf.fit(X_train_i,
@@ -167,7 +176,6 @@ class AndroidTemporalTrainer:
             # SET THRESHOLD WITH VALIDATION
             ############################
 
-            threshold = 0  # default threshold at 0
             if self.val_size > 0:
                 # Adjust threshold by checking FPR on the validation set
                 self.adjust_clf_threshold(X_val_i, y_val_i) #fpr <= 1% by default
@@ -193,7 +201,7 @@ class AndroidTemporalTrainer:
             X_test_i, y_test_i, test_idxs = ds_stack(X, y,
                                                      start=self.train_size + i,
                                                      n_months=self.test_size)
-            print(f"Test months: {len(test_idxs)}, N samples: {X_test_i.shape[0]}")
+            # print(f"Test months: {len(test_idxs)}, N samples: {X_test_i.shape[0]}")
 
             preds = clf_i.predict(X_test_i)
             performance_metrics = compute_all_metrics(preds, y_test_i)
@@ -228,7 +236,6 @@ class AndroidTemporalTrainer:
 
         self.metrics = {**self.metrics, **old_perf}
 
-        print("")
             # result = {
             #     'f1s': f1s,
             #     'precs': precs,

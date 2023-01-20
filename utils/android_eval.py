@@ -35,11 +35,11 @@ def compute_churn_metrics(preds, old_preds, y_true):
 
 
 
-def adjust_threshold(clf, X_val, y_val, fpr=0.01):
+def adjust_threshold(clf, X_val, y_val, max_fpr=0.01):
     val_scores_i = clf.decision_function(X_val)
     fpr, tpr, thresholds = roc_curve(y_val, val_scores_i, pos_label=1)
     # Find the index nearest the selected maximum FPR
-    idx = (np.abs(fpr - 0.01)).argmin()
+    idx = (np.abs(fpr - max_fpr)).argmin()
     threshold = thresholds[idx]
 
     # import matplotlib.pyplot as plt
