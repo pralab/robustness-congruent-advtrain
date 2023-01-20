@@ -119,6 +119,39 @@ def plot_all_churn_matrix():
 
     print("")
 
+def find_candidate_model_pairs():
+    with open('results/perf_matrix.gz', 'rb') as f:
+        data = pickle.load(f)
+    accs = data['acc']
+    robs = data['rob_acc']
+    model_ids = data['model_ids']
+    model_names = data['model_names']
+
+    n_models = len(model_ids)
+
+
+    old_model_ids = []
+    new_model_ids = []
+    for old_id, new_id in product(range(n_models), range(n_models)):
+        if (accs[new_id] > accs[old_id]) and (robs[new_id] > robs[old_id]):
+            old_model_ids.append(model_ids[old_id])
+            new_model_ids.append(model_ids[new_id])
+
+    # old_accs = [accs[i-1] for i in old_model_ids]
+    # new_accs = [accs[i-1] for i in new_model_ids]
+    # old_robs = [robs[i-1] for i in old_model_ids]
+    # new_robs = [robs[i-1] for i in new_model_ids]
+    #
+    # plt.figure()
+    # plt.plot(old_accs, 'b')
+    # plt.plot(new_accs, 'b--')
+    # plt.plot(old_robs, 'r')
+    # plt.plot(new_robs, 'r--')
+    # plt.show()
+
+
+    return old_model_ids, model_ids
+
 
 if __name__ == '__main__':
     # model_ids = (1,2,3,4,5,6,7)
@@ -134,6 +167,8 @@ if __name__ == '__main__':
     # with open('results/perf_matrix.gz', 'wb') as f:
     #     pickle.dump(data, f)
 
-    plot_all_churn_matrix()
+    # plot_all_churn_matrix()
+
+    find_candidate_model_pairs()
 
     print("")
