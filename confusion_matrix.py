@@ -15,61 +15,35 @@ matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 matplotlib.rcParams['mathtext.fontset'] = 'stix'
 
-def compute_churn_matrix(model_ids = (1,2,3,4,5,6),
-                        path='results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500',
+def compute_churn_matrix(model_ids = (1,2,3),
+                        root='results',
                          advx=False):
 
-    # for model_id in model_ids:
-    #     model_name = MODEL_NAMES[model_id]
-    #     model = load_model(model_name, dataset='cifar10', threat_model='Linf')
-
     if advx:
-        path = 'results/advx'
+        root = os.path.join(root, 'advx')
+    else:
+        root = os.path.join(root, 'clean')
 
-    c = 0
-    correct_preds_matrix = None #np.empty(shape=())
-    new_correct = None
+    correct_preds_matrix = None
     for i, model_id in enumerate(model_ids):
-        for root, dirs, files in os.walk(path):
-            if (f"old-{model_id}" in root) \
-                and (any('results_' in file_name for file_name in files) and ('advx' not in root)):
-
-                # res_list = [file_name for file_name in files if 'results_' in file_name]
-                # for res in res_list:
-                results_fname = next((file_name for file_name in files if 'results_' in file_name))
-                with open(os.path.join(root, results_fname), 'rb') as f:
-                    results = pickle.load(f)
-                old_correct = results['old_correct'].numpy()
-                print(f"{model_id} -> Old acc: {old_correct.mean()}")
-                if correct_preds_matrix is None:
-                    correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-                correct_preds_matrix[i, :] = old_correct
-                c += 1
-                break
-
-    if c == 0:
-        for i, model_id in enumerate(model_ids):
-            for root, dirs, files in os.walk(path):
-                if ((MODEL_NAMES[model_id] in root) and ('advx' in root) and ('correct_preds.gz' in files)):
-                    with open(os.path.join(root, 'correct_preds.gz'), 'rb') as f:
-                        old_correct = pickle.load(f).numpy()
-                    print(f"{model_id} -> Old acc: {old_correct.mean()}")
-                    if correct_preds_matrix is None:
-                        correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-                    correct_preds_matrix[i, :] = old_correct
-                    c += 1
-                    break
-    assert c == len(model_ids)
+        with open(os.path.join(root, MODEL_NAMES[model_id], 'correct_preds.gz'), 'rb') as f:
+            correct_preds = pickle.load(f).numpy()
+        print(f"{model_id} -> Acc: {correct_preds.mean()}")
+        if correct_preds_matrix is None:
+            correct_preds_matrix = np.empty(shape=(len(model_ids), correct_preds.shape[0]), dtype=bool)
+        correct_preds_matrix[i, :] = correct_preds
 
     idxs = np.arange(len(model_ids))
 
-    models_acc_gain_matrix = np.empty(shape=(len(model_ids), len(model_ids)))
-    models_nfr_matrix = models_acc_gain_matrix.copy()
+    models_accs = np.empty(shape=len(model_ids))
+    models_nfr_matrix = np.empty(shape=(len(model_ids), len(model_ids)))
     for i, j in product(idxs, idxs):
-        models_acc_gain_matrix[i, j] = (correct_preds_matrix[j, :].mean() - correct_preds_matrix[i, :].mean())*100
-        models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])*100
+        models_accs[i] = correct_preds_matrix[i].mean()
+        models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])
 
-    return models_acc_gain_matrix, models_nfr_matrix
+
+    return models_accs, models_nfr_matrix
+
 
 def reorder_churn_matrix(churn_matrix_dict, order_by='rob_acc'):
     from collections.abc import Iterable
@@ -147,12 +121,13 @@ def plot_all_churn_matrix():
 
 
 if __name__ == '__main__':
-    # acc_gain_matrix, nfr_matrix = compute_churn_matrix()
-    # rob_acc_gain_matrix, rob_nfr_matrix = compute_churn_matrix(advx=True)
+    # model_ids = (1,2,3,4,5,6,7)
+    # acc, nfr_matrix = compute_churn_matrix(model_ids=model_ids)
+    # rob_acc, rob_nfr_matrix = compute_churn_matrix(model_ids=model_ids, advx=True)
 
-    # data = {'acc': acc_gain_matrix, 'nfr': nfr_matrix,
-    #         'rob_acc': acc_gain_matrix, 'rob_nfr': nfr_matrix,
-    #         'model_ids': (1,2,3,4,5,6),
+    # data = {'acc': acc, 'nfr': nfr_matrix,
+    #         'rob_acc': rob_acc, 'rob_nfr': rob_nfr_matrix,
+    #         'model_ids': (1,2,3,4,5,6,7),
     #         'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
     # data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
 
