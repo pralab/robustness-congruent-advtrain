@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 matplotlib.rcParams['mathtext.fontset'] = 'stix'
-matplotlib.rcParams['font.size'] = 17
+matplotlib.rcParams['font.size'] = 15.5
 matplotlib.rcParams['font.family'] = 'STIXGeneral'
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
@@ -71,7 +71,7 @@ def compute_churn_matrix(model_ids = (1,2,3,4,5,6),
 
     return models_acc_gain_matrix, models_nfr_matrix
 
-def reorder_churn_matrix(churn_matrix_dict, order_by='rob_accs'):
+def reorder_churn_matrix(churn_matrix_dict, order_by='rob_acc'):
     from collections.abc import Iterable
     new_idxs = np.argsort(churn_matrix_dict[order_by])
 
@@ -91,7 +91,7 @@ def reorder_churn_matrix(churn_matrix_dict, order_by='rob_accs'):
 def plot_churn_matrix(ax, model_names, accs, nfr,
                       bar_color='seagreen', cmap='summer'):
 
-    sns.heatmap(nfr, annot=True, fmt='g', ax=ax[1],
+    sns.heatmap(nfr*100, annot=True, fmt='g', ax=ax[1],
                 cmap=cmap, cbar=False, vmin=0, vmax=10,
                 xticklabels=[], yticklabels=[])
 
@@ -111,7 +111,7 @@ def plot_all_churn_matrix():
     for adv in (False, True):
         fig, ax = plt.subplots(1, 2, figsize=(11, 7), squeeze=True)
 
-        order = 'rob_accs' if adv else 'accs'
+        order = 'rob_acc' if adv else 'acc'
         accs_key = order
         nfr_key = 'rob_nfr' if adv else 'nfr'
         color = 'seagreen'#'tomato' if adv else 'seagreen'
@@ -137,11 +137,11 @@ def plot_all_churn_matrix():
         fig.show()
         fig.savefig(f'images/churn_matrix_{"robs" if adv else "accs"}.pdf')
 
-    for i in range(2):
-        ax_all[i] = ax[i]
-        ax_all[i+2] = ax[i]
+    # for i in range(2):
+    #     ax_all[i] = ax[i]
+    #     ax_all[i+2] = ax[i]
 
-    fig_all.show()
+    # fig_all.show()
 
     print("")
 
