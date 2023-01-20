@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import torch
 import math
+import pickle
 
 class InvNormalize(Normalize):
     def __init__(self, normalizer):
@@ -118,3 +119,70 @@ def plot_loss(loss, ax, window=20):
     loss_df.plot(ax=ax)
     ax.legend(fontsize=15)
     ax.set_xlabel('iterations')
+
+
+
+###############################
+# ANDROID
+###############################
+
+def plot_android_result(result, ax, i=0):
+    # ax[0, i].plot(result['f1'], color='blue', marker='o', label='F1')
+    # ax[0, i].plot(result['prec'], color='green', marker='*', label='Precision')
+    # ax[0, i].plot(result['rec'], color='red', marker='s', label='Recall')
+    ax[0, i].plot(result['tpr'], color='blue', marker='o', label='TPR')
+    ax[0, i].plot(result['old_tpr'], color='blue', marker='o', linestyle='dashed', label='old-TPR')
+    ax[0, i].plot(result['fpr'], color='red', marker='*', label='FPR')
+    ax[0, i].plot(result['old_fpr'], color='red', marker='*', linestyle='dashed', label='old-FPR')
+
+    ax[1, i].plot(result['nfr_pos'], color='red', marker='v', label='NFR-mw')
+    ax[1, i].plot(result['nfr_neg'], color='green', marker='^', label='NFR-gw')
+    ax[1, i].plot(result['nfr_tot'], color='blue', linestyle='dashed', marker='+', label='NFR-tot')
+
+    # ax[row, 2].plot(result['pfrs_pos'], color='red', marker='>', label='PFR-mw')
+    # ax[row, 2].plot(result['pfrs_neg'], color='green', marker='<', label='PFR-gw')
+    # ax[row, 0].set_ylabel(f"C = {result['C']}")
+
+    # titles = ['Performances (%)',
+    #           'Negative Flip Rate (%)',
+    #           'Positive Flip Rate (%)']
+    titles = ['Performances (%)',
+              'Negative Flip Rate (%)']
+
+    sw = result['sample_weight'] if result['sample_weight'] is not None else 'None'
+    for j, title in enumerate(titles):
+        ax[j, 0].set_ylabel(title)
+        ax[j, i].set_xlabel('Updates')
+        ax[j, i].set_xticks(np.arange(start=0, stop=len(result['f1']), step=3))
+        ax[j, i].legend()
+
+    ax[0, i].set_title(f'sample weight = {sw}')
+    ax[0, i].set_ylim(0, 1)
+    ax[1, i].set_ylim(0, 0.1)
+
+
+def plot_results_sequence_svm(results_path,
+                              fig_fname):
+
+    with open(results_path, 'rb') as f:
+        results = pickle.load(f)
+
+    # for res in results:
+    #     if res['C'] == 0.01:
+    #         result = res
+    #         break
+
+    fig, ax = plt.subplots(2, len(results),
+                           figsize=(5 * len(results), 10),
+                           squeeze=False)
+    for i, result in enumerate(results):
+        plot_android_result(result, ax, i)
+
+    # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
+    # plot_android_result(result, ax)
+
+
+    fig.suptitle(fig_fname)
+    fig.tight_layout()
+    fig.show()
+    fig.savefig(f"images/android/{fig_fname}.pdf")

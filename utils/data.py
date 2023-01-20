@@ -11,6 +11,9 @@ from robustbench.utils import load_model
 # from visualization import imshow, InvNormalize
 # from utils import MODEL_NAMES
 
+from scipy.sparse import vstack, csr_matrix
+import numpy as np
+
 class MyTensorDataset(Dataset):
     def __init__(self, ds_path, transforms=None):
         self.ds_path = ds_path
@@ -138,10 +141,43 @@ def split_train_valid(dataset, train_size=0.8):
     return train_dataset, val_dataset
 
 
-if __name__ == '__main__':
-    model_name = MODEL_NAMES[0]
+##########################
+# ANDROID
+##########################
 
-    for model_name in MODEL_NAMES:
-        print(model_name)
-        dataset = get_dataset_from_file(model_name)
-    print("")
+def ds_stack(X: list, y:list,
+             start: int = 0, n_months: int = 12):
+    X_stack = vstack(X[start: start + n_months])
+    y_stack = np.hstack(y[start: start + n_months])
+
+    idx = 0
+    idxs = []
+    for x in X[start: start + n_months]:
+        idx += x.shape[0]
+        idxs.append(idx)
+    #
+    # X_unstack, y_unstack = ds_unstack(X_stack, y_stack, idxs)
+    #
+    # s = 0
+    # for i in range(n_months):
+    #     s += (X_unstack[i] != X[start: start + n_months][i]).nnz
+    #     s += (y_unstack[i] != y[start: start + n_months][i]).sum()
+    # assert s == 0
+
+    return X_stack, y_stack, idxs
+
+def ds_unstack(X: csr_matrix, y: np.ndarray, idxs: list, preds: list):
+    X_unstack = [X[0 if i == 0 else idxs[i-1]: idxs[i]] for i in range(len(idxs))]
+    y_unstack = np.split(y, idxs)[:-1]
+    preds_unstack = np.split(preds, idxs)[:-1]
+    return X_unstack, y_unstack, preds_unstack
+
+
+if __name__ == '__main__':
+    pass
+    # model_name = MODEL_NAMES[0]
+    #
+    # for model_name in MODEL_NAMES:
+    #     print(model_name)
+    #     dataset = get_dataset_from_file(model_name)
+    # print("")

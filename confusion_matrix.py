@@ -19,53 +19,6 @@ def compute_churn_matrix(model_ids = (1,2,3),
                         root='results',
                          advx=False):
 
-    # if advx:
-    #     path = 'results/clean'
-
-    # c = 0
-    # correct_preds_matrix = None #np.empty(shape=())
-    # new_correct = None
-    # for i, model_id in enumerate(model_ids):
-    #     for root, dirs, files in os.walk(path):
-    #         if (f"new-{model_id}" in root)\
-    #             and (any('results_' in file_name for file_name in files) and ('advx' not in root)):
-
-    #             # sel = 'old' if (f"old-{model_id}" in root) else 'new'
-    #             sel = 'old'
-    #             results_fname = next((file_name for file_name in files if 'results_' in file_name))
-    #             with open(os.path.join(root, results_fname), 'rb') as f:
-    #                 results = pickle.load(f)
-    #             old_correct = results[f"{sel}_correct"].numpy()
-    #             print(f"{model_id} -> acc: {old_correct.mean()}")
-    #             if correct_preds_matrix is None:
-    #                 correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-    #             if correct_preds_matrix[i, :].mean() > 0:
-    #                 correct_preds_matrix[i, :] = old_correct
-    #             c += 1
-    #             break
-
-    # if c == 0:
-    #     for i, model_id in enumerate(model_ids):
-    #         for root, dirs, files in os.walk(path):
-    #             if ((MODEL_NAMES[model_id-1] in root) and ('advx' in root) and ('correct_preds.gz' in files)):
-    #                 with open(os.path.join(root, 'correct_preds.gz'), 'rb') as f:
-    #                     old_correct = pickle.load(f).numpy()
-    #                 print(f"{model_id} -> Rob acc: {old_correct.mean()}")
-    #                 if correct_preds_matrix is None:
-    #                     correct_preds_matrix = np.empty(shape=(len(model_ids), old_correct.shape[0]), dtype=bool)
-    #                 correct_preds_matrix[i, :] = old_correct
-    #                 c += 1
-    #                 break
-    # assert c == len(model_ids)
-
-    # idxs = np.arange(len(model_ids))
-
-    # models_accs = np.empty(shape=len(model_ids))
-    # models_nfr_matrix = np.empty(shape=(len(model_ids), len(model_ids)))
-    # for i, j in product(idxs, idxs):
-    #     models_accs[i] = correct_preds_matrix[i].mean()
-    #     models_nfr_matrix[i, j] = compute_nflips(correct_preds_matrix[i, :], correct_preds_matrix[j, :])
-
     if advx:
         root = os.path.join(root, 'advx')
     else:
@@ -90,7 +43,6 @@ def compute_churn_matrix(model_ids = (1,2,3),
 
 
     return models_accs, models_nfr_matrix
-
 
 
 def reorder_churn_matrix(churn_matrix_dict, order_by='rob_accs'):
@@ -119,8 +71,9 @@ def plot_churn_matrix(ax, model_names, accs, nfr,
 
     model_names = list(model_names)
     model_names.reverse()
+    model_names_short = [MODEL_NAMES_LONG_SHORT_DICT[m] for m in model_names]
     accs = np.flip(accs)
-    p = ax[0].barh(model_names, accs*100, align='center', color=bar_color)
+    p = ax[0].barh(model_names_short, accs*100, align='center', color=bar_color)
     ax[0].bar_label(p, label_type='edge')
 
 
@@ -128,6 +81,7 @@ def plot_all_churn_matrix():
     with open('results/perf_matrix.gz', 'rb') as f:
         data = pickle.load(f)
 
+    fig_all, ax_all = plt.subplots(1, 4, figsize=(22, 7), squeeze=True)
     for adv in (False, True):
         fig, ax = plt.subplots(1, 2, figsize=(11, 7), squeeze=True)
 
@@ -135,14 +89,19 @@ def plot_all_churn_matrix():
         accs_key = order
         nfr_key = 'rob_nfr' if adv else 'nfr'
         color = 'seagreen'#'tomato' if adv else 'seagreen'
+
+
         data = reorder_churn_matrix(data, order_by=order)
 
         plot_churn_matrix(ax, model_names=data['model_names'],
                           accs=data[accs_key], nfr=data[nfr_key],
                           bar_color=color)
+        model_names_short = [MODEL_NAMES_LONG_SHORT_DICT[m]
+                             for m in data['model_names']]
+
         ax[1].set_xticks(np.arange(len(data['model_names'])) + 0.5,
-                         data['model_names'],
-                         rotation=90)
+                         model_names_short,
+                         rotation=45)
         titles = ['Accuracy', 'NFR']
         for j, title_j in enumerate(titles):
             ax[j].set_title(f'{"Robust " if adv else ""}{titles[j]} (%)')
@@ -152,27 +111,27 @@ def plot_all_churn_matrix():
         fig.show()
         fig.savefig(f'images/churn_matrix_{"robs" if adv else "accs"}.pdf')
 
+    for i in range(2):
+        ax_all[i] = ax[i]
+        ax_all[i+2] = ax[i]
+
+    fig_all.show()
+
     print("")
 
 
 if __name__ == '__main__':
-    model_ids = (1,2,3,4,5,6,7)
-    acc, nfr_matrix = compute_churn_matrix(model_ids=model_ids)
-    rob_acc, rob_nfr_matrix = compute_churn_matrix(model_ids=model_ids, advx=True)
+    # model_ids = (1,2,3,4,5,6,7)
+    # acc, nfr_matrix = compute_churn_matrix(model_ids=model_ids)
+    # rob_acc, rob_nfr_matrix = compute_churn_matrix(model_ids=model_ids, advx=True)
 
-    data = {'acc': acc, 'nfr': nfr_matrix,
-            'rob_acc': rob_acc, 'rob_nfr': rob_nfr_matrix,
-            'model_ids': (1,2,3,4,5,6,7),
-            'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
-    data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
+    # data = {'acc': acc, 'nfr': nfr_matrix,
+    #         'rob_acc': rob_acc, 'rob_nfr': rob_nfr_matrix,
+    #         'model_ids': (1,2,3,4,5,6,7),
+    #         'info': 'questa roba contiene le matrici tutti contro tutti dei modelli baseline'}
+    # data['model_names'] = tuple(MODEL_NAMES[i] for i in data['model_ids'])
 
-    with open('results/perf_matrix.gz', 'wb') as f:
-        pickle.dump(data, f)
+    # with open('results/perf_matrix.gz', 'wb') as f:
+    #     pickle.dump(data, f)
 
-    # for ordered_by in (None, 'accs', 'rob_accs', 'both'):
-    #     plot_all_churn_matrix(order_by=ordered_by)
-    #     print("")
-
-    # plot_all_churn_matrix()
-
-    print("")
+    plot_all_churn_matrix()
