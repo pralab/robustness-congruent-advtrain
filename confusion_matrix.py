@@ -134,10 +134,6 @@ if __name__ == '__main__':
     # with open('results/perf_matrix.gz', 'wb') as f:
     #     pickle.dump(data, f)
 
-    # for ordered_by in (None, 'accs', 'rob_accs', 'both'):
-    #     plot_all_churn_matrix(order_by=ordered_by)
-    #     print("")
-
     plot_all_churn_matrix()
 
     print("")
