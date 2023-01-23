@@ -10,6 +10,8 @@ from utils.android_eval import compute_all_metrics, adjust_threshold, compute_ch
 from utils.data import ds_stack, ds_unstack
 from scipy.sparse import vstack, csr_matrix
 from collections import OrderedDict
+from sklearn.feature_selection import SelectFromModel, SelectKBest, chi2
+from sklearn.pipeline import Pipeline
 
 class AndroidTemporalTrainer:
     def __init__(self,
@@ -66,24 +68,35 @@ class AndroidTemporalTrainer:
             X, y, t, train_size=train_size,
             test_size=test_size,
             granularity=granularity)
-
         # self.X, self.y = X, y
-
         return X, y
 
     def reset_classifier(self):
         if self.clf_info['clf_name'] == 'svm':
-            self._clf = LinearSVC(C=self.clf_info['C'],
-                            class_weight=self.class_weight,
-                            max_iter=self.clf_info['max_iter'])
+            self._clf = Pipeline([
+                ('classification', LinearSVC(C=self.clf_info['C'],
+                                             class_weight=self.class_weight,
+                                             max_iter=self.clf_info['max_iter']))
+            ])
+            # self._clf = LinearSVC(C=self.clf_info['C'],
+            #                 class_weight=self.class_weight,
+            #                 max_iter=self.clf_info['max_iter'])
         elif self.clf_info['clf_name'] == 'rf':
-            self._clf = RandomForestClassifier(
-                n_estimators=self.clf_info['n_estimators'],
-                max_depth=self.clf_info['max_depth'])
+            self._clf = Pipeline([
+                ('feature_selection', SelectKBest(chi2, k=10000)),
+                ('classification', RandomForestClassifier(
+                    n_estimators=self.clf_info['n_estimators'],
+                    max_depth=self.clf_info['max_depth'],
+                    class_weight=self.class_weight))
+            ])
+
+    def reset_metrics(self):
+        self.metrics = {}
 
     def adjust_clf_threshold(self, X_val, y_val):
         if self.clf_info['clf_name'] == 'svm':
-            threshold = adjust_threshold(self._clf, X_val, y_val, self.max_fpr)
+            threshold = adjust_threshold(
+                self._clf, X_val, y_val, self.max_fpr)
             self._clf.intercept_[0] = self._clf.intercept_[0] - threshold
         elif self.clf_info['clf_name'] == 'rf':
             print("")
@@ -93,8 +106,7 @@ class AndroidTemporalTrainer:
         # plt.show()
         return
 
-    def reset_metrics(self):
-        self.metrics = {}
+
 
     def update_metrics(self, metrics):
         # todo: qui ci posso mettere qualcosa come args*
@@ -137,10 +149,9 @@ class AndroidTemporalTrainer:
         if self.n_updates is None:
             self.n_updates = len(X) - self.train_size - self.test_size
 
-
         # Iterate over the updates
         for i in range(self.n_updates):
-            # print(f"\n> M{i}/{self.n_updates}")
+            print(f"> M{i}/{self.n_updates}")
 
             ############################
             # DATA
@@ -151,11 +162,13 @@ class AndroidTemporalTrainer:
             X_train_i, y_train_i, train_idxs = ds_stack(X, y,
                                                         start=i,
                                                         n_months=self.train_size - self.val_size)
+
             if self.val_size > 0:
                 # Obtain validation window
                 X_val_i, y_val_i, val_idxs = ds_stack(X, y,
                                                       start=i + self.train_size - self.val_size,
                                                       n_months=self.val_size)
+
 
             ############################
             # TRAIN
@@ -169,7 +182,7 @@ class AndroidTemporalTrainer:
             self.reset_classifier() #reset self._clf
             self._clf.fit(X_train_i,
                           y_train_i,
-                          sample_weight=sample_weights
+                          classification__sample_weight=sample_weights
                           )
 
             ############################
@@ -182,7 +195,20 @@ class AndroidTemporalTrainer:
 
             self.clf_sequence[i] = self._clf    # save new clf update
 
+
+            # Evaluate (can be done after training)
+            X_test_i, y_test_i, test_idxs = ds_stack(X, y,
+                                                     start=self.train_size + i,
+                                                     n_months=self.test_size)
+            preds = self._clf.predict(X_test_i)
+            performance_metrics = compute_all_metrics(preds, y_test_i)
+
+            self.print_perf(performance_metrics)
+
         return
+
+    def evaluate_single(self, X, y):
+        pass
 
     def evaluate_sequence(self, X, y):
         assert len(self.clf_sequence) > 0, \
@@ -203,6 +229,8 @@ class AndroidTemporalTrainer:
                                                      n_months=self.test_size)
             # print(f"Test months: {len(test_idxs)}, N samples: {X_test_i.shape[0]}")
 
+            # metrics_i = self.evaluate_single(X_test_i, y_test_i)
+
             preds = clf_i.predict(X_test_i)
             performance_metrics = compute_all_metrics(preds, y_test_i)
 
@@ -221,8 +249,8 @@ class AndroidTemporalTrainer:
 
             metrics_i = {**performance_metrics, **churn_metrics}
 
-            # # todo: trovare modo comodo per tutte ste variabili delle metriche
-            # # append results in each metric
+            # todo: trovare modo comodo per tutte ste variabili delle metriche
+            # append results in each metric
             self.update_metrics(metrics_i)
 
         old_perf = {}
@@ -274,3 +302,7 @@ class AndroidTemporalTrainer:
 
         for key in keys:
             pass
+
+    def print_perf(self, perf_dict):
+        for key, value in perf_dict.items():
+            print(f"{key}: {value*100:.2f}%")
