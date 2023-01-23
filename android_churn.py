@@ -6,34 +6,43 @@ from utils.android_trainer import AndroidTemporalTrainer
 
 def main_train_sequence():
 
-    clf_info = {'clf_name': 'svm',
-                'C': 0.01,
-                'max_iter': 1000}
+    # clf_info = {'clf_name': 'svm',
+    #             'C': 0.01,
+    #             'max_iter': 1000}
 
     # clf_info = {'clf_name': 'rf',
-    #             'n_estimators': 20,
-    #             'max_depth': 10}
+    #             'n_estimators': 100,
+    #             'max_depth': 20}
 
-    class_weight = 'balanced'
-    # sample_weight_list = [None, 2, 5, 10, 100, 1000]
-    sample_weight = [None, 0.1, 0.2, 0.5, 1, 2, 5, 10, 100]
-    overwrite = True
-    test_size = 5
-    train_size = 12
-    val_size = 0 #1
-    max_fpr = 0.01
-    n_updates = 12
-    temporal_weight = False
-
-
-    class_weight_list = [None, 'balanced']
-    max_fpr_list = [.01, .02, .05]
-
-    prod = list(cartesian_product(class_weight_list, max_fpr_list))
+    n_estimators = [10, 50, 100, 1000]
+    max_depth = [10, 20, 50, 100]
+    prod = list(cartesian_product(n_estimators, max_depth))
     n_runs = len(prod)
 
-    for i, (class_weight, max_fpr) in enumerate(prod):
-        print(f"{i+1}/{n_runs}: cw: {class_weight}, max_fpr: {max_fpr}")
+    for i, (n_estimators, max_depth) in enumerate(prod):
+        print(f"{i+1}/{n_runs}: n_estim: {n_estimators}, max_depth: {max_depth}")
+        clf_info = {'clf_name': 'rf',
+                    'n_estimators': n_estimators,
+                    'max_depth': max_depth}
+
+        class_weight = 'balanced'
+        # sample_weight_list = [None, 2, 5, 10, 100, 1000]
+        sample_weight = [None, 2, 5, 10, 100]
+        overwrite = False
+        test_size = 5
+        train_size = 12
+        val_size = 0 #1
+        max_fpr = 0.01
+        n_updates = 12
+        temporal_weight = False
+
+        # class_weight_list = [None, 'balanced']
+        # max_fpr_list = [.01, .02, .05]
+        # prod = list(cartesian_product(class_weight_list, max_fpr_list))
+        # n_runs = len(prod)
+
+        # for i, (class_weight, max_fpr) in enumerate(prod):
+        #     print(f"{i+1}/{n_runs}: cw: {class_weight}, max_fpr: {max_fpr}")
 
         fname = f"cw-{class_weight}_" \
                 f"tr-{train_size}_" \
@@ -42,8 +51,13 @@ def main_train_sequence():
                 f"fpr-{max_fpr}_" \
                 f"n_updates-{n_updates}_" \
                 f"{clf_info['clf_name']}"
+        if clf_info['clf_name'] == 'rf':
+            fname += f"_n_estim-{clf_info['n_estimators']}_" \
+                     f"max_depth-{clf_info['max_depth']}"
+
         # fname = "results_cw-balanced_tr-12_ts-3_C-[0.01]"
-        results_path = f"results/android/{fname}.pkl"
+
+        results_path = f"results/android/rf_xgrid/{fname}.pkl"
         fig_fname = fname
 
         title = f"{clf_info}" \
