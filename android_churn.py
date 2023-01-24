@@ -3,6 +3,11 @@ from utils.visualization import plot_sequence_results_android
 from itertools import product as cartesian_product
 from utils.android_trainer import AndroidTemporalTrainer
 
+def grid_search():
+    pass
+
+def train_single():
+    pass
 
 def main_train_sequence():
 
@@ -14,18 +19,29 @@ def main_train_sequence():
     #             'n_estimators': 100,
     #             'max_depth': 20}
 
-    n_estimators = [10, 50, 100, 1000]
-    max_depth = [10, 20, 50, 100]
-    prod = list(cartesian_product(n_estimators, max_depth))
+    # n_estimators = [10, 50, 100, 1000]
+    # max_depth = [10, 20, 50, 100]
+    # prod = list(cartesian_product(n_estimators, max_depth))
+    # n_runs = len(prod)
+    # for i, (n_estimators, max_depth) in enumerate(prod):
+    #     print(f"{i+1}/{n_runs}: n_estim: {n_estimators}, max_depth: {max_depth}")
+    #     clf_info = {'clf_name': 'rf',
+    #                 'n_estimators': n_estimators,
+    #                 'max_depth': max_depth}
+
+    C = [1e-3, 5e-3, 1e-2, 5e-2, 1e-1]
+    class_weight = ['balanced', None]
+    val_size = [0, 1, 2]
+    fpr = [0.01, 0.02, 0.03]
+    prod = list(cartesian_product(C, class_weight, val_size, fpr))
     n_runs = len(prod)
+    for i, (C, class_weight) in enumerate(prod):
+        print(f"{i+1}/{n_runs}: C: {C}, class_weight: {class_weight}")
+        clf_info = {'clf_name': 'svm',
+                    'C': C,
+                    'max_iter': 1000}
 
-    for i, (n_estimators, max_depth) in enumerate(prod):
-        print(f"{i+1}/{n_runs}: n_estim: {n_estimators}, max_depth: {max_depth}")
-        clf_info = {'clf_name': 'rf',
-                    'n_estimators': n_estimators,
-                    'max_depth': max_depth}
-
-        class_weight = 'balanced'
+        # class_weight = 'balanced'
         # sample_weight_list = [None, 2, 5, 10, 100, 1000]
         sample_weight = [None, 2, 5, 10, 100]
         overwrite = False
@@ -57,7 +73,11 @@ def main_train_sequence():
 
         # fname = "results_cw-balanced_tr-12_ts-3_C-[0.01]"
 
-        results_path = f"results/android/rf_xgrid/{fname}.pkl"
+        root = "results/android/rf_xgrid"
+        results_path = os.path.join(root, f"{fname}.pkl")
+        if not os.path.isdir(root):
+            os.makedirs(root)
+
         fig_fname = fname
 
         title = f"{clf_info}" \

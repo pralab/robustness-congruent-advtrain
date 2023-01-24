@@ -13,6 +13,8 @@ import math
 import numpy as np
 import argparse
 
+from confusion_matrix import find_candidate_model_pairs
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-cuda', default=1, type=int)
 parser.add_argument('-adv_tr', default=0, type=int)
@@ -60,17 +62,19 @@ def train_pct_pipeline():
                 else "cpu")
 
     random_seed=0
-    old_model_ids=[1,2,3,4,5,6]
-    model_ids = [old_model_id + 1 for old_model_id in old_model_ids]
+    # old_model_ids=[1,2,3,4,5,6]
+    # model_ids = [old_model_id + 1 for old_model_id in old_model_ids]
+    old_model_ids, model_ids = find_candidate_model_pairs()
+
     trainable_layers = None 
     adv_training = bool(args.adv_tr)
-    temporal = True
+    temporal = False
     n_tr = None  
     n_ts = None
     epochs=12
     batch_size=500
     lr=1e-3
-    loss_names = ['PCT'] #, 'MixMSE', 'MixMSE(NF)']
+    loss_names = ['PCT', 'MixMSE']
     betas = [1, 2, 5, 10]
     alphas = [1, 1, 1, 1]
     exp_name = f"epochs-{epochs}_batchsize-{batch_size}_{args.exp_name}"
@@ -309,22 +313,20 @@ def train_pct_model(model, old_model,
             adv_pc_train_epoch(model, old_model, device, train_loader, optimizer, e, loss_fn, mixmse)
             
         # check performance on validation
-        results = get_pct_results(new_model=model, ds_loader=val_loader, 
+        val_results = get_pct_results(new_model=model, ds_loader=val_loader, 
                         old_model=old_model, device=device)
-        acc, nfr, pfr = results['new_acc'], results['nfr'], results['pfr']        
+        acc, nfr, pfr = val_results['new_acc'], val_results['nfr'], val_results['pfr']        
         print(f"Epoch {e}, OldAcc: {old_acc*100:.3f}%, "\
                 f"NewAcc: {acc*100:.3f}%, "\
                 f"NFR: {nfr*100:.3f}%, "\
                 f"PFR: {pfr*100:.3f}%")
 
         # Compact information to eventually save them
-        val_perf = {'acc': acc, 'nfr': nfr, 'pfr': pfr}
         model_data = {
             'epoch': e,
             'model_state_dict': model.cpu().state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss_fn,
-            'perf': val_perf
+            'loss': loss_fn
             }
 
         # Save the model when highest accuracy on validation is reached
@@ -332,19 +334,19 @@ def train_pct_model(model, old_model,
             best_acc = acc
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_acc.pt"))
             with open(os.path.join(exp_dir, 'val_perf_best_acc.gz'), 'wb') as f:
-                pickle.dump(val_perf, f)
+                pickle.dump(val_results, f)
         
         # Save the model when lowest NFR on validation is reached
         if (nfr < best_nfr) and (keep_best in ('nfr', 'both')):
             best_nfr = nfr
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
             with open(os.path.join(exp_dir, 'val_perf_best_nfr.gz'), 'wb') as f:
-                pickle.dump(val_perf, f)
+                pickle.dump(val_results, f)
 
     # Save the model after the last epoch
     torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
     with open(os.path.join(exp_dir, 'val_perf_last.gz'), 'wb') as f:
-        pickle.dump(val_perf, f)
+        pickle.dump(val_results, f)
 
 
 def select_model_from_validation(loss_dir_path, alphas, betas):
@@ -384,5 +386,5 @@ def print_perf(s0, oldacc, newacc, nfr, pfr):
 
 
 if __name__ == '__main__':
-    print("")
+    train_pct_pipeline()
 
