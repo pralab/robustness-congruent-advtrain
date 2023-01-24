@@ -67,10 +67,11 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
     Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
     """
     model = model.to(device)
+    old_model.eval()
     batch_size = train_loader.batch_size
 
     if mixmse:
-        new_model = deepcopy(model)
+        new_model = deepcopy(model).to(device)
 
     with tqdm(total=len(train_loader)) as t:
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -99,9 +100,13 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
                         eps=eps, norm=float('inf'), n_iter=n_steps)            
             model.train()
             adv_output = model(advx)
-            adv_old_output = old_model(advx)
+
+            with torch.no_grad():
+                adv_old_output = old_model(advx)
+                if mixmse:
+                    adv_new_output = new_model(advx)
+                        
             if mixmse:
-                adv_new_output = new_model(advx)
                 loss = loss_fn(model_output=adv_output, target=target, 
                                     old_output=adv_old_output, new_output=adv_new_output)
             else:
@@ -133,43 +138,8 @@ def freeze_network(model, n_layer=1):
                 param.requires_grad = False
 
 
-class MLP(nn.Module):
-    def __init__(self, input_size=784, output_size=10, hidden_units=120):
-        super().__init__()
-        self.l1 = nn.Linear(input_size, hidden_units)
-        self.l2 = nn.Linear(hidden_units, output_size)
-        self.relu = nn.ReLU()
-    
-    def forward(self, x):
-        x = x.view(x.shape[0], 28*28)
-        x = self.relu(self.l1(x))
-        return self.relu(self.l2(x))
 
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-        self.conv1 = nn.Sequential(         
-            nn.Conv2d(
-                in_channels=1,              
-                out_channels=16,            
-                kernel_size=5,              
-                stride=1,                   
-                padding=2,                  
-            ),                              
-            nn.ReLU(),                      
-            nn.MaxPool2d(kernel_size=2),    
-        )
-        self.conv2 = nn.Sequential(         
-            nn.Conv2d(16, 32, 5, 1, 2),     
-            nn.ReLU(),                      
-            nn.MaxPool2d(2),                
-        )
-        # fully connected layer, output 10 classes
-        self.out = nn.Linear(32 * 7 * 7, 10)
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
-        x = x.view(x.size(0), -1)       
-        output = self.out(x)
-        return output
+
+
+
+

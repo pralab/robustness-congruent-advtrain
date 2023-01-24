@@ -99,7 +99,7 @@ def generate_advx(ds_loader, model_names, eps,
 
 
 
-def get_models_info_list(root, advx_folder):
+def get_models_info_list(root, advx_folder, nopes=None):
     old_models_idx = []
     new_models_idx = []
     models_info_list = []
@@ -116,6 +116,10 @@ def get_models_info_list(root, advx_folder):
             loss_name = path.split('/')[-3]
             models_pair = path.split('/')[-4]
             advx_path = os.path.join(advx_folder, models_pair, loss_name, hparams)
+
+            if nopes is not None:
+                if robustbench_old_idx in nopes:
+                    continue
 
             old_models_idx.append(robustbench_old_idx)
             new_models_idx.append(robustbench_idx)
@@ -148,7 +152,12 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     from utils.visualization import imshow
     from utils.eval import evaluate_acc
+    import argparse
     
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-cuda', default=1, type=int, choices=[0, 1])
+    parser.add_argument('-exp_id', default=0, type=int, choices=[0, 1])
+    args = parser.parse_args()
 
     batch_size = 200
     n_steps = 50
@@ -156,8 +165,11 @@ if __name__ == '__main__':
 
 
     set_all_seed(0)
-    root = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
-    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+    roots = ['results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR',
+            'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR']
+    root = roots[args.exp_id]
+    device = f"cuda:{args.cuda}" if torch.cuda.is_available() else 'cpu'
+    split_cuda = False
 
 
     advx_folder = os.path.join(root, 
@@ -166,63 +178,74 @@ if __name__ == '__main__':
         os.mkdir(advx_folder)
 
 
-    logger = init_logger(advx_folder, fname='progress_only_preds')
-    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder)
+    logger = init_logger(advx_folder, fname="progress_advx" + f"_{device}" if split_cuda else "progress_advx")
+    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=[1,2,4,5,6])
 
 
-    logger.info('>>> Baseline Robustness')
-    models_id = np.unique(np.array(new_models_idx + old_models_idx))
-    nope_list = []
-    for model_id in models_id:
-        model_name = MODEL_NAMES[model_id]
-        logger.info(f"-> {model_id} - {model_name}")   
-        model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
-        base_path = os.path.join('results', 'advx', model_name)
-        ds_path = os.path.join(base_path, 'ts')
-        if not os.path.isdir(ds_path):
-            os.makedirs(ds_path)
+    if split_cuda:
+        half_exps = len(models_info_list) // 2
+        if '1' in device:
+            models_info_list = models_info_list[:half_exps]
+            old_models_idx = old_models_idx[:half_exps]
+            new_models_idx = new_models_idx[:half_exps]
+        else:
+            models_info_list = models_info_list[half_exps:]
+            old_models_idx = old_models_idx[half_exps:]
+            new_models_idx = new_models_idx[half_exps:]
+
+    # logger.info('>>> Baseline Robustness')
+    # models_id = np.unique(np.array(new_models_idx + old_models_idx))
+    # nope_list = []
+    # for model_id in models_id:
+    #     model_name = MODEL_NAMES[model_id]
+    #     logger.info(f"-> {model_id} - {model_name}")   
+    #     model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+    #     base_path = os.path.join('results', 'advx', model_name)
+    #     ds_path = os.path.join(base_path, 'ts')
+    #     if not os.path.isdir(ds_path):
+    #         os.makedirs(ds_path)
         
-        batch_size_temp = batch_size
-        escape_flag = 4
-        while(True):
-            try:
-                # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-                # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
-                # # if not os.path.exists(ds_path):
-                # generate_advx_ds(model=model, ds_loader=ds_loader, 
-                #                 ds_path=ds_path, device=device, n_steps=n_steps)
-                # logger.debug("Advx generation completed.")
-                # else:
-                #     logger.debug('Advx already existing')
+    #     batch_size_temp = batch_size
+    #     escape_flag = 4
+    #     while(True):
+    #         try:
+    #             # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+    #             # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+    #             # # if not os.path.exists(ds_path):
+    #             # generate_advx_ds(model=model, ds_loader=ds_loader, 
+    #             #                 ds_path=ds_path, device=device, n_steps=n_steps)
+    #             # logger.debug("Advx generation completed.")
+    #             # else:
+    #             #     logger.debug('Advx already existing')
                 
 
-                corrects_path = os.path.join(base_path, 'correct_preds.gz')
-                # if not os.path.exists(corrects_path):
-                adv_ds = MyTensorDataset(ds_path=ds_path)
-                adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
-                correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
-                with open(corrects_path, 'wb') as f:
-                    pickle.dump(correct_preds.cpu(), f)
-                logger.debug("Preds completed.")
-                # else:
-                #     logger.debug('Preds already existing')
+    #             corrects_path = os.path.join(base_path, 'correct_preds.gz')
+    #             # if not os.path.exists(corrects_path):
+    #             adv_ds = MyTensorDataset(ds_path=ds_path)
+    #             adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
+    #             correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
+    #             with open(corrects_path, 'wb') as f:
+    #                 pickle.dump(correct_preds.cpu(), f)
+    #             logger.debug("Preds completed.")
+    #             # else:
+    #             #     logger.debug('Preds already existing')
 
 
-            except Exception as e:
-                logger.debug(f"Model {model_id} failed: {e}")
-                if escape_flag == 0:
-                    logger.debug('Escape flag activated.')
-                    break
-                else:
-                    if 'CUDA out of memory' in str(e):                        
-                        batch_size_temp = int(batch_size_temp / 2)
-                        logger.debug(f"Trying with batch size {batch_size_temp}")
-                        escape_flag = escape_flag - 1
-                        continue
-                    else:
-                        break
-            else:
-                break
+    #         except Exception as e:
+    #             logger.debug(f"Model {model_id} failed: {e}")
+    #             if escape_flag == 0:
+    #                 logger.debug('Escape flag activated.')
+    #                 break
+    #             else:
+    #                 if 'CUDA out of memory' in str(e):                        
+    #                     batch_size_temp = int(batch_size_temp / 2)
+    #                     logger.debug(f"Trying with batch size {batch_size_temp}")
+    #                     escape_flag = escape_flag - 1
+    #                     continue
+    #                 else:
+    #                     break
+    #         else:
+    #             break
 
 
     
@@ -249,13 +272,13 @@ if __name__ == '__main__':
         escape_flag = 5
         while(True):
             try:
-                # # Reload dataset with updated batch_size
-                # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-                # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+                # Reload dataset with updated batch_size
+                ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+                ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
 
-                # generate_advx_ds(model=model, ds_loader=ds_loader, 
-                #                 ds_path=ds_path, device=device, n_steps=n_steps)
-                # logger.debug("Advx generation completed.")
+                generate_advx_ds(model=model, ds_loader=ds_loader, 
+                                ds_path=ds_path, device=device, n_steps=n_steps)
+                logger.debug("Advx generation completed.")
 
 
                 adv_ds = MyTensorDataset(ds_path=ds_path)
@@ -285,7 +308,7 @@ if __name__ == '__main__':
                 #     logger.debug('Advx already existing.')
 
             except Exception as e:
-                logger.debug(f"Model {model_id} failed: {e}")
+                logger.debug(f"Model {model_name} failed: {e}")
                 if escape_flag == 0:
                     logger.debug('Escape flag activated.')
                     break

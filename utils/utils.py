@@ -12,7 +12,17 @@ import torchvision.transforms as transforms
 
 # ordinati dalla leaderboard su github (a fine pagina)
 
+# #ordinati per la robustness misurata su 2k sample advx
+# MODEL_NAMES = [
+# 'Zhang2020Attacks',
+# 'Rice2020Overfitting',
+# 'Rade2021Helper_R18_ddpm',
+# 'Hendrycks2019Using',
+# 'Addepalli2021Towards_WRN34',
+# 'Carmon2019Unlabeled',
+# ]
 
+# Usati per finetuning e AT dove robustness non era strettamente crescente
 MODEL_NAMES = ['Standard',
 'Engstrom2019Robustness',
 'Rice2020Overfitting',
@@ -26,6 +36,22 @@ MODEL_NAMES = ['Standard',
 'Gowal2021Improving_70_16_ddpm_100m'
 ]
 
+
+MODEL_NAMES_SHORT = ['Std.',
+'Engstrom',
+'Rice',
+'Zhang',
+'Hendrycks',
+'Rade',
+'Addep.',
+'Carmon',
+'Kang',
+'Gowal2020',
+'Gowal2021'
+]
+
+MODEL_NAMES_LONG_SHORT_DICT = {k: v for k, v in zip(MODEL_NAMES,
+                                                    MODEL_NAMES_SHORT)}
 
 # MODEL_NAMES = ['Standard', #81
 # 'Engstrom2019Robustness', #53

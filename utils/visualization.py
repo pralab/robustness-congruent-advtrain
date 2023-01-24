@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from secml.utils import fm
 import os
 import pandas as pd
-import seaborn as sns
 import torch
 import math
+import pickle
 
 class InvNormalize(Normalize):
     def __init__(self, normalizer):
@@ -119,3 +119,99 @@ def plot_loss(loss, ax, window=20):
     loss_df.plot(ax=ax)
     ax.legend(fontsize=15)
     ax.set_xlabel('iterations')
+
+
+
+###############################
+# ANDROID
+###############################
+
+def plot_results_android(results, ax, i=0):
+    # ax[0, i].plot(result['f1'], color='blue', marker='o', label='F1')
+    # ax[0, i].plot(result['prec'], color='green', marker='*', label='Precision')
+    # ax[0, i].plot(result['rec'], color='red', marker='s', label='Recall')
+    ax[0, i].plot(results[i]['tpr'], color='red', marker='o', label='TPR')
+    ax[0, i].plot(results[i]['old_tpr'], color='red', marker='*', linestyle='dashed', label='old-TPR')
+    # ax[0, i].plot(result['fpr'], color='red', marker='o', label='FPR')
+    # ax[0, i].plot(result['old_fpr'], color='red', marker='*', linestyle='dashed', label='old-FPR')
+    tnr = 1 - np.array(results[i]['fpr'])
+    old_tnr = [(1 - x) if x is not None else None for x in results[i]['old_fpr']]
+    ax[0, i].plot(tnr, color='green', marker='o', label='TNR')
+    ax[0, i].plot(old_tnr, color='green', marker='*', linestyle='dashed', label='old-TNR')
+
+    nfr_pos = np.array([math.nan] + results[i]['nfr_pos'][1:])
+    nfr_neg = np.array([math.nan] + results[i]['nfr_neg'][1:])
+    nfr_mean = (nfr_neg + nfr_pos)/2
+    nfr_tot = np.array([math.nan] + results[i]['nfr_tot'][1:])
+
+    # ax[1, i].plot(nfr_pos, color='red', marker='v', label='NFR-mw')
+    # ax[1, i].plot(nfr_neg, color='green', marker='^', label='NFR-gw')
+    ax[1, i].plot(nfr_mean, color='green', marker='^', label='NFR-mean')
+    ax[1, i].plot(nfr_tot, color='blue', linestyle='dashed', marker='+', label='NFR-tot')
+
+    # Plot differences
+    if i > 0:
+        old_nfr_pos = np.array([math.nan] + results[0]['nfr_pos'][1:])
+        old_nfr_neg = np.array([math.nan] + results[0]['nfr_neg'][1:])
+        old_nfr_tot = np.array([math.nan] + results[0]['nfr_tot'][1:])
+        nfr_pos = nfr_pos - old_nfr_pos
+        nfr_neg = nfr_neg - old_nfr_neg
+        nfr_mean = nfr_mean - (old_nfr_pos - old_nfr_neg)/2
+        nfr_tot = nfr_tot - old_nfr_tot
+        # ax[2, i].plot(nfr_pos, color='red', marker='v', label='NFR-mw')
+        # ax[2, i].plot(nfr_neg, color='green', marker='^', label='NFR-gw')
+        ax[2, i].plot(nfr_mean, color='green', marker='^', label='NFR-mean')
+        ax[2, i].plot(nfr_tot, color='blue', linestyle='dashed', marker='+', label='NFR-tot')
+
+    ax[2, i].axhline(y=0, color='k', linestyle='dashed')
+
+    # ax[row, 2].plot(result['pfrs_pos'], color='red', marker='>', label='PFR-mw')
+    # ax[row, 2].plot(result['pfrs_neg'], color='green', marker='<', label='PFR-gw')
+    # ax[row, 0].set_ylabel(f"C = {result['C']}")
+
+    # titles = ['Performances (%)',
+    #           'Negative Flip Rate (%)',
+    #           'Positive Flip Rate (%)']
+    titles = ['Performances (%)',
+              'Negative Flip Rate (%)',
+              'NFR(i) - NFR(0)']
+
+    sw = results[i]['sample_weight'] if results[i]['sample_weight'] is not None else 'None'
+    for j, title in enumerate(titles):
+        ax[j, 0].set_ylabel(title)
+        ax[j, i].set_xlabel('Updates')
+        ax[j, i].set_xticks(np.arange(start=0, stop=len(results[i]['f1']), step=3))
+        ax[j, i].legend()
+
+    ax[0, i].set_title(f'sample weight = {sw}')
+    ax[0, i].set_ylim(0.6, 1)
+    ax[1, i].set_ylim(0, 0.02)
+
+
+def plot_sequence_results_android(results_path,
+                              fig_fname,
+                              title=None):
+
+    with open(results_path, 'rb') as f:
+        results = pickle.load(f)
+
+    # for res in results:
+    #     if res['C'] == 0.01:
+    #         result = res
+    #         break
+
+    n_rows = 3
+    fig, ax = plt.subplots(n_rows, len(results),
+                           figsize=(5 * len(results), 5 * n_rows),
+                           squeeze=False)
+    for i in range(len(results)):
+        plot_results_android(results, ax, i)
+
+    # fig, ax = plt.subplots(1, 2, figsize=(10, 5), squeeze=False)
+    # plot_android_result(result, ax)
+
+    title = fig_fname if title is None else title
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.show()
+    fig.savefig(f"images/android/{fig_fname}.pdf")

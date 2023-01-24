@@ -11,3 +11,5 @@ code_backup
 __pycache__
 *.out
 
+/churn/
+/latex_files/

@@ -2,6 +2,7 @@ import torch
 import math
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 
 def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, device=None):
     if device is None:
@@ -79,16 +80,28 @@ def get_ds_outputs(model, ds_loader, device):
 #     return nf_idxs.mean()
 
 def compute_nflips(old_preds, new_preds, indexes=False):
-    old_preds = pd.Series(old_preds.cpu().tolist())
-    new_preds = pd.Series(new_preds.cpu().tolist())
+    if not isinstance(old_preds, np.ndarray):
+        old_preds = old_preds.cpu().tolist()
+        new_preds = new_preds.cpu().tolist()
+    old_preds = pd.Series(old_preds)
+    new_preds = pd.Series(new_preds)
     nf_idxs = (old_preds & (~new_preds))
     return nf_idxs if indexes else nf_idxs.mean()
 
 def compute_pflips(old_preds, new_preds, indexes=False):
-    old_preds = pd.Series(old_preds.cpu().tolist())
-    new_preds = pd.Series(new_preds.cpu().tolist())
+    if not isinstance(old_preds, np.ndarray):
+        old_preds = old_preds.cpu().tolist()
+        new_preds = new_preds.cpu().tolist()
+    old_preds = pd.Series(old_preds)
+    new_preds = pd.Series(new_preds)
     pf_idxs = ((~old_preds) & new_preds)
     return pf_idxs if indexes else pf_idxs.mean()
+
+def compute_common_nflips(clean_nf_idxs, advx_nf_idxs):
+    only_rob_nfr = ((~clean_nf_idxs) & advx_nf_idxs).mean()
+    only_acc_nfr = ((clean_nf_idxs) & ~advx_nf_idxs).mean()
+    common_nfr = ((clean_nf_idxs) & advx_nf_idxs).mean()
+    return only_rob_nfr, only_acc_nfr, common_nfr
 
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     model = model.to(device)
