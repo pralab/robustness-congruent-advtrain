@@ -134,10 +134,10 @@ def plot_results_android(results, ax, i=0):
     ax[0, i].plot(results[i]['old_tpr'], color='red', marker='*', linestyle='dashed', label='old-TPR')
     # ax[0, i].plot(result['fpr'], color='red', marker='o', label='FPR')
     # ax[0, i].plot(result['old_fpr'], color='red', marker='*', linestyle='dashed', label='old-FPR')
-    tpr = 1 - np.array(results[i]['fpr'])
-    old_tpr = [(1 - x) if x is not None else None for x in results[i]['old_fpr']]
-    ax[0, i].plot(tpr, color='green', marker='o', label='TPR')
-    ax[0, i].plot(old_tpr, color='green', marker='*', linestyle='dashed', label='old-TPR')
+    tnr = 1 - np.array(results[i]['fpr'])
+    old_tnr = [(1 - x) if x is not None else None for x in results[i]['old_fpr']]
+    ax[0, i].plot(tnr, color='green', marker='o', label='TNR')
+    ax[0, i].plot(old_tnr, color='green', marker='*', linestyle='dashed', label='old-TNR')
 
     nfr_pos = np.array([math.nan] + results[i]['nfr_pos'][1:])
     nfr_neg = np.array([math.nan] + results[i]['nfr_neg'][1:])
