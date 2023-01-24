@@ -91,8 +91,6 @@ def train_pct_model(model, old_model,
 
         if acc > best_acc:
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_acc.pt"))
-        
-        # il secondo causa errore di scrittura file!!!
         if nfr < best_nfr:
             torch.save(model_data, os.path.join(checkpoints_dir, f"best_nfr.pt"))
 
@@ -115,7 +113,7 @@ def print_perf(s0, oldacc, newacc, nfr, pfr):
 
 
 if __name__ == '__main__':
-    device = torch.device("cuda:1" if torch.cuda.is_available()
+    device = torch.device("cuda:0" if torch.cuda.is_available()
                 else "cpu")
 
     random_seed=0
@@ -124,13 +122,13 @@ if __name__ == '__main__':
     # specify number of last layers to train, the others will be freezed, train all if None
     trainable_layers = None 
     adv_training = True
-    n_tr = None
-    n_ts = None
-    epochs=12
-    batch_size=500
+    n_tr = 250
+    n_ts = 250
+    epochs=5
+    batch_size=250
     lr=1e-3
-    betas = [1, 2, 5, 10, 100]
-    alphas = [1, 1, 1, 1, 1]
+    # betas = [1, 2, 5, 10, 100]
+    # alphas = [1, 1, 1, 1, 1]
     betas = [1]
     alphas = [1]
     tr_model_sel = 'last'   # last, best_acc, best_nfr
