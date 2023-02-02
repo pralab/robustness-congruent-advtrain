@@ -13,10 +13,10 @@ import math
 import numpy as np
 import argparse
 
-from confusion_matrix import find_candidate_model_pairs
+# from confusion_matrix import find_candidate_model_pairs
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-cuda', default=1, type=int)
+parser.add_argument('-cuda', default=0, type=int)
 parser.add_argument('-adv_tr', default=0, type=int)
 parser.add_argument('-exp_name', default='exp', type=str)
 
@@ -56,6 +56,8 @@ def train_pct_pipeline():
     |___ ...
     |___ ...
     """
+
+
     args = parser.parse_args()
 
     device = torch.device(f"cuda:{args.cuda}" if torch.cuda.is_available()
@@ -64,7 +66,12 @@ def train_pct_pipeline():
     random_seed=0
     # old_model_ids=[1,2,3,4,5,6]
     # model_ids = [old_model_id + 1 for old_model_id in old_model_ids]
-    old_model_ids, model_ids = find_candidate_model_pairs()
+    # old_model_ids, model_ids = find_candidate_model_pairs()
+
+    # old_model_ids = [1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
+    # model_ids = [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
+    old_model_ids = [2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
+    model_ids = [5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
 
     trainable_layers = None 
     adv_training = bool(args.adv_tr)
@@ -74,12 +81,11 @@ def train_pct_pipeline():
     epochs=12
     batch_size=500
     lr=1e-3
-    loss_names = ['PCT', 'MixMSE']
+    loss_names = ['PCT'] #, 'MixMSE']
     betas = [1, 2, 5, 10]
     alphas = [1, 1, 1, 1]
     exp_name = f"epochs-{epochs}_batchsize-{batch_size}_{args.exp_name}"
-    # exp_name = f"PROVADEBUG_CLEAN"
-
+    # exp_name = "day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR"
     root = 'results'
     date = datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")
     exp_path = os.path.join(root, f"{date}_{exp_name}")
