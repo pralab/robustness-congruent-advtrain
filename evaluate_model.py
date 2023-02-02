@@ -688,17 +688,58 @@ def plot_histogram(path='results/single_models_res'):
     print("")
 
 
+def evaluate_ensemble():
+    result_path = 'results'
+    old_ensemble_id = [1,2,3]
+    new_ensemble_id = [4,5,6]
+
+    def get_ensemble_preds(ensemble_ids):
+        ensemble_preds = []
+        for model_id in ensemble_ids:
+            model_name = MODEL_NAMES[model_id]
+            path = join(result_path, 'advx', model_name, 'correct_preds.gz')
+            with open(path, 'rb') as f:
+                preds = pkl.load(f)
+            ensemble_preds.append(preds.tolist())
+
+        ensemble_preds = np.array(ensemble_preds)
+        ensemble_preds = (ensemble_preds.mean(axis=0)>0.5)
+        return ensemble_preds
+    
+    old_ensemble_preds = get_ensemble_preds(old_ensemble_id)
+    new_ensemble_preds = get_ensemble_preds(new_ensemble_id)
+
+    old_ensemble_acc = old_ensemble_preds.mean()
+    new_ensemble_acc = new_ensemble_preds.mean()
+
+    ensemble_nfr = compute_nflips(old_ensemble_preds, new_ensemble_preds)
+
+    print(f"Old Acc: {old_ensemble_acc}")
+    print(f"New Acc: {new_ensemble_acc}")
+    print(f"NFR: {ensemble_nfr}")
+
+
+
+    print("")
+
+
+
+
 
 if __name__ == '__main__':
 
-    # model_sel = tuple(range(1, 7))
-    model_sel = (1, 3, 5, 6)
 
-    losses = ('PCT', 'MixMSE')#, 'MixMSE(NF)')
-    table_model_results(model_sel=model_sel, losses=losses, diff=False)
-    # table_model_results(model_sel=model_sel, losses=losses, diff=True)
-    # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
-    # plot_histogram()
+    evaluate_ensemble()
+
+    
+    # # model_sel = tuple(range(1, 7))
+    # model_sel = (1, 3, 5, 6)
+    
+    # losses = ('PCT', 'MixMSE')#, 'MixMSE(NF)')
+    # table_model_results(model_sel=model_sel, losses=losses, diff=False)
+    # # table_model_results(model_sel=model_sel, losses=losses, diff=True)
+    # # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
+    # # plot_histogram()
 
 
 

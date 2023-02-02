@@ -150,7 +150,7 @@ def find_candidate_model_pairs():
     # plt.show()
 
 
-    return old_model_ids, model_ids
+    return old_model_ids, new_model_ids
 
 
 if __name__ == '__main__':
