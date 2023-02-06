@@ -9,7 +9,7 @@ class MLP(nn.Module):
         self.relu = nn.ReLU()
     
     def forward(self, x):
-        x = x.view(x.shape[0], 28*28)
+        x = x.view(x.shape[0], -1)
         x = self.relu(self.l1(x))
         return self.relu(self.l2(x))
 

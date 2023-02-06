@@ -156,7 +156,7 @@ def plot_results_android(results, ax, i=0):
         old_nfr_tot = np.array([math.nan] + results[0]['nfr_tot'][1:])
         nfr_pos = nfr_pos - old_nfr_pos
         nfr_neg = nfr_neg - old_nfr_neg
-        nfr_mean = nfr_mean - (old_nfr_pos - old_nfr_neg)/2
+        nfr_mean = nfr_mean - (old_nfr_pos + old_nfr_neg)/2
         nfr_tot = nfr_tot - old_nfr_tot
         # ax[2, i].plot(nfr_pos, color='red', marker='v', label='NFR-mw')
         # ax[2, i].plot(nfr_neg, color='green', marker='^', label='NFR-gw')
