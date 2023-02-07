@@ -15,6 +15,7 @@ from utils.models_simple import MyLinear, MLP
 
 from torch.utils.data import DataLoader, TensorDataset
 
+# todo: can go to utils.data
 def blobs_to_tensor_ds(n_features, centers, cluster_std,
                        n_samples, random_state, batch_size):
     ds = CDLRandomBlobs(n_features=n_features,
@@ -30,28 +31,42 @@ def blobs_to_tensor_ds(n_features, centers, cluster_std,
     return X, Y, ds, ds_loader
 
 def demo_train(model_class, input_size, output_size, train_loader,
-               lr=1e-3, n_epochs=1, device='cpu', loss_fn=None, adv_tr=False,
+               lr=1e-3, n_epochs=1, device='cpu', old_model=None, loss_fn=None, adv_tr=False,
                seed=0):
 
     set_all_seed(seed)
     model = model_class(input_size=input_size, output_size=output_size)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     set_all_seed(seed)
-    if loss_fn is None:
-        loss_fn = MyCrossEntropyLoss()
-        for epoch in range(n_epochs):
-            train_epoch(model=model, device=device, train_loader=train_loader,
-                        optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
+    if adv_tr:
+        if loss_fn is None:
+            loss_fn = MyCrossEntropyLoss()
+            for epoch in range(n_epochs):
+                adv_train_epoch(model=model, device=device, train_loader=train_loader,
+                               optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
+        else:
+            for epoch in range(n_epochs):
+
+                adv_pc_train_epoch(model=model, old_model=old_model, device=device,
+                                   train_loader=train_loader, optimizer=optimizer,
+                                   epoch=epoch, loss_fn=loss_fn)
     else:
-        for epoch in range(n_epochs):
-            pc_train_epoch(model=model, device=device, train_loader=train_loader,
-                        optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
+        if loss_fn is None:
+            loss_fn = MyCrossEntropyLoss()
+            for epoch in range(n_epochs):
+                train_epoch(model=model, device=device, train_loader=train_loader,
+                            optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
+        else:
+            for epoch in range(n_epochs):
+                pc_train_epoch(model=model, device=device, train_loader=train_loader,
+                            optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
 
 
 
 
     return model, loss_fn
 
+# todo: can go to utils.evaluate BUT TO BE RENAMED
 def compute_metrics(model, ds_loader, device, old_correct=None):
     metrics = {}
 
@@ -72,7 +87,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
                n_epochs=5, batch_size=1, lr=1e-3,
                alpha=1, beta=5, eval_trainset=True,
                diff_model_init=False, diff_trset_init=False,
-               show_losses=False,
+               show_losses=False, adv_tr=False,
                fname=None, random_state=999):
 
     if not isinstance(alpha, list):
@@ -134,7 +149,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
     old_model, old_loss_fn = demo_train(model_class=model_class,
                                         input_size=n_features, output_size=len(centers),
                                         lr=lr, n_epochs=n_epochs, device=device,
-                                        train_loader=tr_loader['old'],
+                                        train_loader=tr_loader['old'], adv_tr=adv_tr,
                                         seed=random_state_model)
 
     old_metrics = compute_metrics(old_model, ds_loader, device)
@@ -245,6 +260,7 @@ def main():
     diff_model_init = True
     diff_trset_init = True
     show_losses = False
+    adv_tr = True
     model_class = MyLinear
     theta = 10
 
@@ -261,7 +277,7 @@ def main():
          alpha=alpha, beta=beta,
          eval_trainset=eval_trainset,
          diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-         show_losses=show_losses,
+         show_losses=show_losses, adv_tr=adv_tr,
          fname=fname, random_state=random_state)
 
     print("")
