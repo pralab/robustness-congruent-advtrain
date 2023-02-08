@@ -53,7 +53,7 @@ def show_loss_from_csv_to_filefig(csv_path, fig_path):
 
 def my_plot_decision_regions(model, samples, targets, device='cpu',
                              flipped_samples=None, ax=None, n_grid_points=100,
-                             fname=None):
+                             fname=None, show_boxes=False):
     min = torch.min(samples, axis=0)[0] - 1
     max = torch.max(samples, axis=0)[0] + 1
     n_points_per_dim = math.floor(math.sqrt(n_grid_points))
@@ -93,14 +93,12 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
         y_list = samples.numpy()[:, 1]
         c_list = targets.cpu().int().numpy()
 
-        # EDGE_COLOR_LIST = ['none', 'k']
-        # edge_fun = lambda idx: EDGE_COLOR_LIST[idx]
-        # edge_list = (flipped_samples*1).to_numpy()
-        # edge_list_idx = list(map(edge_fun, edge_list))
-
         ax.scatter(x_list, y_list,
                    c=c_list, alpha=alpha_idx, cmap=plt.cm.coolwarm,
                    s=s_idx, edgecolors='k')
+
+        if show_boxes:
+            pass
 
     # ax.set_xticks(())
     # ax.set_yticks(())

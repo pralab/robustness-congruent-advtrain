@@ -80,10 +80,10 @@ def adv_train_epoch(model, device, train_loader,
                         eps=eps, norm=float('inf'), n_iter=n_steps)
             model.train()
             adv_output = model(advx)
-            loss = loss_fn(model_output=adv_output, target=target)
+            loss = loss_fn(input=adv_output, target=target)
 
             optimizer.zero_grad()
-            loss[0].backward()
+            loss.backward()
             optimizer.step()
 
             t.set_postfix(
@@ -92,7 +92,7 @@ def adv_train_epoch(model, device, train_loader,
                     batch_idx * len(data),
                     len(train_loader.dataset),
                     100. * batch_idx / len(train_loader)),
-                loss='{:.4f}'.format(loss[0].item()))
+                loss='{:.4f}'.format(loss.item()))
             # loss_ce='{:.4f}'.format(np.array(ce_cumul).mean()),
             # loss_pc='{:.4f}'.format(np.array(pc_cumul).mean()))
             t.update()

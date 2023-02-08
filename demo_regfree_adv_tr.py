@@ -12,6 +12,10 @@ from utils.utils import set_all_seed, rotate
 from utils.eval import get_ds_outputs, evaluate_acc, compute_nflips, compute_pflips, correct_predictions
 from utils.custom_loss import MyCrossEntropyLoss, PCTLoss, MixedPCTLoss
 from utils.models_simple import MyLinear, MLP
+from adv_lib.attacks.auto_pgd import apgd
+
+import matplotlib
+matplotlib.use('macosx')
 
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -25,10 +29,14 @@ def blobs_to_tensor_ds(n_features, centers, cluster_std,
                              random_state=random_state).load()
     X = torch.Tensor(ds.X.tolist())
     Y = torch.Tensor(ds.Y.tolist())
+    Y = Y.type(torch.int64)
     ds = TensorDataset(X, Y)
     ds_loader = DataLoader(ds, batch_size=batch_size, shuffle=False)
 
     return X, Y, ds, ds_loader
+
+def adv_ds_loader(model, ds_loader):
+    pass
 
 def demo_train(model_class, input_size, output_size, train_loader,
                lr=1e-3, n_epochs=1, device='cpu', old_model=None, loss_fn=None, adv_tr=False,
@@ -46,7 +54,6 @@ def demo_train(model_class, input_size, output_size, train_loader,
                                optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
         else:
             for epoch in range(n_epochs):
-
                 adv_pc_train_epoch(model=model, old_model=old_model, device=device,
                                    train_loader=train_loader, optimizer=optimizer,
                                    epoch=epoch, loss_fn=loss_fn)
@@ -57,6 +64,7 @@ def demo_train(model_class, input_size, output_size, train_loader,
                 train_epoch(model=model, device=device, train_loader=train_loader,
                             optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
         else:
+            assert old_model is not None, 'Adv PC Training need the instance of the old model'
             for epoch in range(n_epochs):
                 pc_train_epoch(model=model, device=device, train_loader=train_loader,
                             optimizer=optimizer, epoch=epoch, loss_fn=loss_fn)
@@ -83,7 +91,8 @@ def compute_metrics(model, ds_loader, device, old_correct=None):
 
     return metrics
 
-def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100,
+def train_plot(model_class, centers, cluster_std=1., theta=0.,
+               n_samples_per_class=100, n_test_sample_per_class=100,
                n_epochs=5, batch_size=1, lr=1e-3,
                alpha=1, beta=5, eval_trainset=True,
                diff_model_init=False, diff_trset_init=False,
@@ -97,8 +106,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
 
     assert len(alpha) == len(beta)
 
-    lsel = 2 if show_losses else 1
-    n_plot_x = lsel    #len(diff_trset_init) * 2     # include loss plots
+    n_plot_x = 2
     n_plot_y = 1 + len(alpha)
     fig, ax = plt.subplots(n_plot_x, n_plot_y,
                            figsize=(n_plot_y*5, n_plot_x*5),
@@ -109,7 +117,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
     n_features = 2  # number of features
     n_points_per_dim = 1e5
     n_samples = n_samples_per_class * len(centers)  # number of samples
-
+    n_test_samples = n_test_sample_per_class * len(centers)
     ###################################
     # DATA PREPARATION
     ###################################
@@ -136,7 +144,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
         X, Y, ds, ds_loader = blobs_to_tensor_ds(n_features=n_features,
                                                  centers=rotate(centers, theta_i),
                                                  cluster_std=cluster_std,
-                                                 n_samples=n_samples,
+                                                 n_samples=n_test_samples,
                                                  random_state=random_state_trsets,
                                                  batch_size=batch_size)
 
@@ -152,26 +160,10 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
                                         train_loader=tr_loader['old'], adv_tr=adv_tr,
                                         seed=random_state_model)
 
+    # todo: mettere adv_ds_loader prima dell'evaluation, così so quali sono i robustness flip
     old_metrics = compute_metrics(old_model, ds_loader, device)
     old_correct = old_metrics['new_correct']    # the function considers "new" the model you pass as argument
     old_acc = old_metrics['new_acc']
-    #
-    # my_plot_decision_regions(model=old_model, samples=X, targets=Y,
-    #                          device=device, flipped_samples=None,
-    #                          ax=ax[0, 0],
-    #                          n_grid_points=n_points_per_dim)
-    # ax[0, 0].set_xlabel(f"Acc: {old_acc * 100:.2f}%")
-
-
-    # my_plot_decision_regions(new_model, X, Y, device, new_metrics['idxs'], ax[lsel, 1],
-    #                          n_grid_points=n_points_per_dim)
-    # ax[lsel, 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%"
-    #                         f"({'+' if diff_acc >= 0 else ''}{diff_acc * 100:.2f}%)\n"
-    #                         f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%), "
-    #                         f"PF: {pf_idxs.sum()} ({pfr * 100:.2f}%)")
-
-    if show_losses:
-        plot_loss(old_loss_fn.loss_path, ax=ax[lsel + 1, 0])
 
 
     random_state_model = random_state + 2 if diff_model_init \
@@ -187,7 +179,8 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
                                             input_size=n_features, output_size=len(centers),
                                             lr=lr, n_epochs=n_epochs, device=device,
                                             train_loader=tr_loader['new'],
-                                            loss_fn=loss_fn,
+                                            old_model=old_model,
+                                            loss_fn=loss_fn, adv_tr=adv_tr,
                                             seed=random_state_model)
 
         new_metrics = compute_metrics(new_model, ds_loader, device, old_correct)
@@ -214,9 +207,6 @@ def train_plot(model_class, centers, cluster_std=1., theta=0., n_samples_per_cla
                                    f"({'+' if diff_acc>=0 else ''}{diff_acc * 100:.2f}%)\n"
                                    f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%), "
                                    f"PF: {pf_idxs.sum()} ({pfr * 100:.2f}%)")
-        if show_losses:
-            plot_loss(new_loss_fn.loss_path, ax=ax[1, j + 1])
-
 
     for i in range(n_plot_x):
         for j in range(n_plot_y):
@@ -250,13 +240,13 @@ def main():
 
     lr = 1e-3
     ft_lr = 1e-3
-    n_epochs = 10
-    n_ft_epochs = 10
+    n_epochs = 12
     batch_size = 10
     n_samples_per_class = 50
+    n_test_samples_per_class = 5
 
 
-    eval_trainset = True
+    eval_trainset = False
     diff_model_init = True
     diff_trset_init = True
     show_losses = False
@@ -271,14 +261,16 @@ def main():
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
     train_plot(model_class=model_class, centers=centers,
-         cluster_std=cluster_std, theta=theta, n_samples_per_class=n_samples_per_class,
-         n_epochs=n_epochs, batch_size=batch_size,
-         lr=lr,
-         alpha=alpha, beta=beta,
-         eval_trainset=eval_trainset,
-         diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-         show_losses=show_losses, adv_tr=adv_tr,
-         fname=fname, random_state=random_state)
+               cluster_std=cluster_std, theta=theta,
+               n_samples_per_class=n_samples_per_class,
+               n_test_sample_per_class=n_test_samples_per_class,
+               n_epochs=n_epochs, batch_size=batch_size,
+               lr=lr,
+               alpha=alpha, beta=beta,
+               eval_trainset=eval_trainset,
+               diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+               show_losses=show_losses, adv_tr=adv_tr,
+               fname=fname, random_state=random_state)
 
     print("")
 
