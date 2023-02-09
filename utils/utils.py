@@ -227,7 +227,11 @@ def rotate(x, theta):
     theta = np.radians(theta)
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
+
+    center = x.mean(axis=0)
+    x = x - center
     x_rot = R.dot(x.T).T
+    x_rot = x_rot + center
 
     # import matplotlib.pyplot as plt
     #
