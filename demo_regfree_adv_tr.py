@@ -43,7 +43,7 @@ def blobs_to_tensor_ds(n_features, centers, cluster_std,
 
     return X, Y, ds, ds_loader
 
-def make_adv_ds_loader(model, ds_loader, device, eps=0.2, n_steps=5):
+def make_adv_ds_loader(model, ds_loader, device, eps=0.2, n_steps=20):
     model.to(device)
     model.eval()
 
@@ -69,9 +69,10 @@ def make_adv_ds_loader(model, ds_loader, device, eps=0.2, n_steps=5):
     return adv_ds_loader, X_adv
 
 def demo_train(model_class, input_size, output_size, train_loader,
-               lr=1e-3, n_epochs=1, device='cpu', old_model=None, loss_fn=None, adv_tr=False,
+               lr=1e-3, n_epochs=1, device='cpu', old_model=None,
+               loss_fn=None, adv_tr=False,
                eps=1, seed=0):
-
+    n_iter = 5
     set_all_seed(seed)
     model = model_class(input_size=input_size, output_size=output_size)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -81,12 +82,14 @@ def demo_train(model_class, input_size, output_size, train_loader,
             loss_fn = MyCrossEntropyLoss()
             for epoch in range(n_epochs):
                 adv_train_epoch(model=model, device=device, train_loader=train_loader,
-                               optimizer=optimizer, epoch=epoch, loss_fn=loss_fn, eps=eps)
+                                optimizer=optimizer, epoch=epoch, loss_fn=loss_fn,
+                                eps=eps, n_steps=n_iter)
         else:
             for epoch in range(n_epochs):
                 adv_pc_train_epoch(model=model, old_model=old_model, device=device,
                                    train_loader=train_loader, optimizer=optimizer,
-                                   epoch=epoch, loss_fn=loss_fn, eps=eps)
+                                   epoch=epoch, loss_fn=loss_fn,
+                                   eps=eps, n_steps=n_iter)
     else:
         if loss_fn is None:
             loss_fn = MyCrossEntropyLoss()
@@ -157,10 +160,10 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
     else:
         set_all_seed(random_state)
         X, Y, ds, ds_loader = blobs_to_tensor_ds(n_features=n_features,
-                                                 centers=rotate(centers, theta_i),
+                                                 centers=centers,
                                                  cluster_std=cluster_std,
                                                  n_samples=n_test_samples,
-                                                 random_state=random_state_trsets,
+                                                 random_state=random_state,
                                                  batch_size=batch_size)
 
     ###################################
@@ -238,7 +241,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
             # Plot testing set  and NFs withing decision regions
             my_plot_decision_regions(model=old_model, samples=X, targets=Y,
                                      device=device, flipped_samples=nf_idxs,
-                                     adv_flipped_samples=~old_correct_adv, x_adv=old_X_adv,
+                                     adv_correct=~old_correct_adv, x_adv=old_X_adv,
                                      ax=ax[0], eps=eps,
                                      n_grid_points=n_points_per_dim)
             ax[0].set_xlabel(f"Acc: {old_acc * 100:.2f}%\n"
@@ -246,7 +249,8 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
 
         my_plot_decision_regions(model=new_model, samples=X, targets=Y,
                                  device=device, flipped_samples=nf_idxs,
-                                 adv_flipped_samples=~adv_new_correct, x_adv=X_adv,
+                                 adv_flipped_samples=adv_nf_idxs,
+                                 adv_correct=~adv_new_correct, x_adv=X_adv,
                                  ax=ax[j + 1], eps=eps,
                                  n_grid_points=n_points_per_dim)
 
@@ -260,19 +264,19 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
         #                         f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%)\n"
         #                         f"Rob: {adv_new_acc * 100:.2f}%"
         #                         f"({'+' if adv_diff_acc>=0 else ''}{adv_diff_acc * 100:.2f}%)"\
-        #                         f"adv-NF: {adv_nf_idxs.sum()} ({adv_nfr * 100:.2f}%")
+        #                         f"adv-NF: {adv_nf_idxs.sum()} ({adv_nfr * 100:.2f}%)")
 
-        ax[j + 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%, "\
-                                f"NF: {nf_idxs.sum()} ({nfr * 100:.2f}%)\n"
-                                f"Rob: {adv_new_acc * 100:.2f}%, "\
-                                f"adv-NF: {adv_nf_idxs.sum()} ({adv_nfr * 100:.2f}%")
+        ax[j + 1].set_xlabel(f"Acc: {new_acc * 100:.2f}%, " \
+                             f"NF: {nf_idxs.sum()}\n"
+                             f"Rob: {adv_new_acc * 100:.2f}%, " \
+                             f"adv-NF: {adv_nf_idxs.sum()}")
 
 
 def main():
     random_state = 2
     # centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]])    # centers of the clusters
-    centers = np.array([[.35, .35], [.65, .35], [.5, .65]])  # centers of the clusters
-    delta = .2
+    centers = np.array([[.3, .3], [.7, .3], [.5, .7]])  # centers of the clusters
+    delta = .25
     cluster_std = delta/3  # standard deviation of the clusters
 
     k = 1
@@ -286,9 +290,9 @@ def main():
 
     lr = 1e-2
     ft_lr = 1e-3
-    n_epochs = 20
-    batch_size = 20
-    n_samples_per_class = 100
+    n_epochs = 10
+    n_samples_per_class = 50
+    batch_size = 10
     n_test_samples_per_class = 5
     eps = 0.05
 
@@ -296,14 +300,13 @@ def main():
     eval_trainset = False
     diff_model_init = True
     diff_trset_init = True
-    show_losses = False
     # adv_tr = True
     model_class = MyLinear
     theta = 10
 
     model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-    fname = None
+    fname = 'churn_plot2D'
     # f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
     #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
@@ -334,7 +337,7 @@ def main():
         elif j == 1:
             ax[0, j].set_title('New model')
         else:
-            ax[0, j].set_title(f"alpha={alpha[j - 1]}, beta={beta[j - 1]})")
+            ax[0, j].set_title(f"alpha={alpha[j - 1]}, beta={beta[j - 1]}")
 
     ax[0, 0].set_ylabel("PCT")
     ax[1, 0].set_ylabel("PCT-AT")
@@ -342,7 +345,7 @@ def main():
     fig.tight_layout()
     fig.show()
     if fname is not None:
-        fig.savefig(f'images/{fname}.pdf')
+        fig.savefig(f'images/demo_2D/{fname}.pdf')
 
 
 

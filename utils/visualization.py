@@ -53,8 +53,10 @@ def show_loss_from_csv_to_filefig(csv_path, fig_path):
 
 
 def my_plot_decision_regions(model, samples, targets, device='cpu',
-                             flipped_samples=None, ax=None, n_grid_points=100,
-                             fname=None, adv_flipped_samples=None, x_adv=None,
+                             flipped_samples=None, adv_flipped_samples=None,
+                             adv_correct=None,
+                             ax=None, n_grid_points=100,
+                             fname=None,  x_adv=None,
                              eps=1):
     min = torch.min(samples, axis=0)[0] - 1
     max = torch.max(samples, axis=0)[0] + 1
@@ -99,9 +101,9 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
                    cmap=cmap, s=20, edgecolors='k')
     else:
         alpha_idx = flipped_samples*1
-        alpha_idx[~flipped_samples] = 0.5
-        s_idx = flipped_samples*60
-        s_idx[~flipped_samples] = 20
+        alpha_idx[~flipped_samples] = 0.7
+        s_idx = flipped_samples*80
+        s_idx[~flipped_samples] = 40
         x_list = samples.cpu().numpy()[:, 0]
         y_list = samples.numpy()[:, 1]
         c_list = [color_list[t] for t in targets]
@@ -116,18 +118,30 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
                    c=c_list, alpha=alpha_idx, cmap=cmap,
                    s=s_idx, edgecolors='k')
 
-        if adv_flipped_samples is not None:
-            colors = np.array(['k'] * adv_flipped_samples.shape[0])
-            colors[adv_flipped_samples] = 'r'
+        if adv_correct is not None:
+            colors = np.array(['k'] * adv_correct.shape[0])
+            colors[adv_correct] = 'r'
 
             # fig, ax = plt.subplots(1, 1)
             # ax.scatter(samples.numpy()[:, 0], samples.numpy()[:, 1])
 
             for i, (x, y) in enumerate(samples.numpy()):
+                linestyle = '--'
+                linewidth = 1
+                if adv_flipped_samples is not None:
+                    if adv_flipped_samples[i]:
+                        linestyle = '-'
+                        linewidth = 2
                 color = colors[i]
                 ax.add_patch(Rectangle((x-eps, y-eps), eps*2, eps*2,
                                        edgecolor=color,
+                                       linestyle=linestyle,
+                                       linewidth=linewidth,
                                        facecolor='none'))
+
+
+
+
 
 
 
