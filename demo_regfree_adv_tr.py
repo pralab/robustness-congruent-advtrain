@@ -25,17 +25,13 @@ from torch.utils.data import DataLoader, TensorDataset
 
 # todo: can go to utils.data
 def blobs_to_tensor_ds(n_features, centers, cluster_std,
-                       n_samples, random_state, batch_size, transform=None):
+                       n_samples, random_state, batch_size):
     ds = CDLRandomBlobs(n_features=n_features,
                         centers=centers,
                         cluster_std=cluster_std,
                         n_samples=n_samples,
                         random_state=random_state).load()
     X = torch.Tensor(ds.X.tolist())
-    # X_min, X_max = X.min(), X.max()
-    # new_X_min, new_X_max = 0.1, 0.9
-    # X = (X - X_min) / (X_max - X_min) * (new_X_max - new_X_min) + new_X_min
-
     Y = torch.Tensor(ds.Y.tolist())
     Y = Y.type(torch.int64)
     ds = TensorDataset(X, Y)
@@ -43,7 +39,7 @@ def blobs_to_tensor_ds(n_features, centers, cluster_std,
 
     return X, Y, ds, ds_loader
 
-def make_adv_ds_loader(model, ds_loader, device, eps=0.2, n_steps=20):
+def make_adv_ds_loader(model, ds_loader, device, eps=0.2, n_steps=50):
     model.to(device)
     model.eval()
 
@@ -72,7 +68,8 @@ def demo_train(model_class, input_size, output_size, train_loader,
                lr=1e-3, n_epochs=1, device='cpu', old_model=None,
                loss_fn=None, adv_tr=False,
                eps=1, seed=0):
-    n_iter = 5
+
+    n_iter = 50
     set_all_seed(seed)
     model = model_class(input_size=input_size, output_size=output_size)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -273,79 +270,84 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
 
 
 def main():
-    random_state = 2
+    lr = 1e-2
+    n_epochs = 100
+    n_samples_per_class = 5
+    batch_size = 1
+    n_test_samples_per_class = 5
+    eps = 0.07
+
+
+    eval_trainset = True
+    diff_model_init = False
+    diff_trset_init = False
+    # adv_tr = True
+    model_class = MyLinear
+    theta = 0
+
+    random_state = 1
     # centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]])    # centers of the clusters
     centers = np.array([[.3, .3], [.7, .3], [.5, .7]])  # centers of the clusters
-    delta = .25
+    delta = .3
     cluster_std = delta/3  # standard deviation of the clusters
 
     k = 1
     centers = centers / k
     cluster_std = cluster_std / k
 
-    # alpha = [0,10,1,1,1,1,1]
-    # beta = [10,0,1,2,5,10,100]
-    alpha = [None, 1, 1, 1, 1]
-    beta = [None, 1, 2, 5, 10]
+    # alpha = [None, 1, 1, 1, 1]
+    # beta = [None, 1, 2, 5, 10]
 
-    lr = 1e-2
-    ft_lr = 1e-3
-    n_epochs = 10
-    n_samples_per_class = 50
-    batch_size = 10
-    n_test_samples_per_class = 5
-    eps = 0.05
+    alpha = [None]#[None, 1, 1, 1, 1]
+    beta = [None]#[None, 1, 2, 5, 10]
 
 
-    eval_trainset = False
-    diff_model_init = True
-    diff_trset_init = True
-    # adv_tr = True
-    model_class = MyLinear
-    theta = 10
 
     model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-    fname = 'churn_plot2D'
-    # f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
-    #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
+    for random_state in range(10):
+        fname = f"churn_plot2D_rs-{random_state}"
+        # f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
+        #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
 
-    n_plot_x = 2
-    n_plot_y = 1 + len(alpha)
-    fig, ax = plt.subplots(n_plot_x, n_plot_y,
-                           figsize=(n_plot_y*5, n_plot_x*5),
-                           squeeze=False)
-    for i, adv_tr in enumerate([False, True]):
-        train_plot(model_class=model_class, centers=centers,
-                   cluster_std=cluster_std, theta=theta,
-                   n_samples_per_class=n_samples_per_class,
-                   n_test_sample_per_class=n_test_samples_per_class,
-                   n_epochs=n_epochs, batch_size=batch_size,
-                   lr=lr, eps=eps,
-                   alpha=alpha, beta=beta,
-                   eval_trainset=eval_trainset,
-                   diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-                   adv_tr=adv_tr, ax=ax[i],
-                   random_state=random_state)
+        ylabels = ['PCT', 'PCT-AT']
+        adv_tr_list = [False, True]
 
-        print("")
+        n_plot_x = len(ylabels)
+        n_plot_y = 1 + len(alpha)
+        fig, ax = plt.subplots(n_plot_x, n_plot_y,
+                               figsize=(n_plot_y*5, n_plot_x*5),
+                               squeeze=False)
 
-    for j in range(n_plot_y):
-        if j == 0:
-            ax[0, j].set_title('Old model')
-        elif j == 1:
-            ax[0, j].set_title('New model')
-        else:
-            ax[0, j].set_title(f"alpha={alpha[j - 1]}, beta={beta[j - 1]}")
+        for i in range(2):
+            train_plot(model_class=model_class, centers=centers,
+                       cluster_std=cluster_std, theta=theta,
+                       n_samples_per_class=n_samples_per_class,
+                       n_test_sample_per_class=n_test_samples_per_class,
+                       n_epochs=n_epochs, batch_size=batch_size,
+                       lr=lr, eps=eps,
+                       alpha=alpha, beta=beta,
+                       eval_trainset=eval_trainset,
+                       diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+                       adv_tr=adv_tr_list[i], ax=ax[i],
+                       random_state=random_state)
 
-    ax[0, 0].set_ylabel("PCT")
-    ax[1, 0].set_ylabel("PCT-AT")
+            ax[i, 0].set_ylabel(ylabels[i])
 
-    fig.tight_layout()
-    fig.show()
-    if fname is not None:
-        fig.savefig(f'images/demo_2D/{fname}.pdf')
+        for j in range(n_plot_y):
+            if j == 0:
+                ax[0, j].set_title('Old model')
+            elif j == 1:
+                ax[0, j].set_title('New model')
+            else:
+                ax[0, j].set_title(f"alpha={alpha[j - 1]}, beta={beta[j - 1]}")
+
+
+        fig.tight_layout()
+        fig.show()
+        if fname is not None:
+            fig.savefig(f'images/demo_2D/{fname}.pdf')
 
 
 

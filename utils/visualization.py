@@ -95,10 +95,15 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
                 colors=color_list,
                 alpha=0.3)
 
+    c_list = [color_list[t] for t in targets]
+
     if flipped_samples is None:
-        ax.scatter(samples.cpu().numpy()[:, 0], samples.numpy()[:, 1],
-                   c=targets.cpu().int().numpy(), alpha=0.7,
-                   cmap=cmap, s=20, edgecolors='k')
+        alpha_idx = 1
+        s_idx = 40
+
+        # ax.scatter(samples.cpu().numpy()[:, 0], samples.numpy()[:, 1],
+        #            c=targets.cpu().int().numpy(), alpha=0.7,
+        #            cmap=cmap, s=20, edgecolors='k')
     else:
         alpha_idx = flipped_samples*1
         alpha_idx[~flipped_samples] = 0.7
@@ -106,38 +111,38 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
         s_idx[~flipped_samples] = 40
         x_list = samples.cpu().numpy()[:, 0]
         y_list = samples.numpy()[:, 1]
-        c_list = [color_list[t] for t in targets]
 
-        if x_adv is not None:
-            ax.scatter(x_adv.numpy()[:, 0], x_adv.numpy()[:, 1],
-                       c=c_list, alpha=alpha_idx, cmap=cmap,
-                       s=s_idx, edgecolors='k', marker='v')
-            print("")
 
-        ax.scatter(x_list, y_list,
+    if x_adv is not None:
+        ax.scatter(x_adv.numpy()[:, 0], x_adv.numpy()[:, 1],
                    c=c_list, alpha=alpha_idx, cmap=cmap,
-                   s=s_idx, edgecolors='k')
+                   s=s_idx, edgecolors='k', marker='v')
+        print("")
 
-        if adv_correct is not None:
-            colors = np.array(['k'] * adv_correct.shape[0])
-            colors[adv_correct] = 'r'
+    ax.scatter(x_list, y_list,
+               c=c_list, alpha=alpha_idx, cmap=cmap,
+               s=s_idx, edgecolors='k')
 
-            # fig, ax = plt.subplots(1, 1)
-            # ax.scatter(samples.numpy()[:, 0], samples.numpy()[:, 1])
+    if adv_correct is not None:
+        colors = np.array(['k'] * adv_correct.shape[0])
+        colors[adv_correct] = 'r'
 
-            for i, (x, y) in enumerate(samples.numpy()):
-                linestyle = '--'
-                linewidth = 1
-                if adv_flipped_samples is not None:
-                    if adv_flipped_samples[i]:
-                        linestyle = '-'
-                        linewidth = 2
-                color = colors[i]
-                ax.add_patch(Rectangle((x-eps, y-eps), eps*2, eps*2,
-                                       edgecolor=color,
-                                       linestyle=linestyle,
-                                       linewidth=linewidth,
-                                       facecolor='none'))
+        # fig, ax = plt.subplots(1, 1)
+        # ax.scatter(samples.numpy()[:, 0], samples.numpy()[:, 1])
+
+        for i, (x, y) in enumerate(samples.numpy()):
+            linestyle = '--'
+            linewidth = 1
+            if adv_flipped_samples is not None:
+                if adv_flipped_samples[i]:
+                    linestyle = '-'
+                    linewidth = 2
+            color = colors[i]
+            ax.add_patch(Rectangle((x-eps, y-eps), eps*2, eps*2,
+                                   edgecolor=color,
+                                   linestyle=linestyle,
+                                   linewidth=linewidth,
+                                   facecolor='none'))
 
 
 
