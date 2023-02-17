@@ -111,6 +111,10 @@ FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
+def join(*args):
+    path = fm.join(*args).replace('\\', '/')
+    return path
+
 def set_all_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
