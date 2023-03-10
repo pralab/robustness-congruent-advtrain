@@ -132,35 +132,6 @@ def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     return correct / len(test_loader.dataset)
 
 
-def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
-    model = model.to(device)
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        with tqdm(total=len(test_loader)) as t:
-            for batch_idx, (data, target) in enumerate(test_loader):
-                data, target = data.to(device), target.to(device)
-                output = model(data)
-                if loss_fn is not None:
-                    loss = loss_fn(output, target)
-                    test_loss += loss.item()  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
-
-                t.set_postfix(
-                    epoch='{}'.format(epoch),
-                    completed='[{}/{} ({:.0f}%)]'.format(
-                        batch_idx * len(data),
-                        len(test_loader.dataset),
-                        100. * batch_idx / len(test_loader)))
-                    # loss='{:.4f}'.format(loss.item()))
-                t.update()
-
-        test_loss /= len(test_loader.dataset)
-    return correct / len(test_loader.dataset)
-
-
 if __name__ == "__main__":
     import pandas as pd
     from secml.utils import fm

@@ -60,6 +60,44 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
     return
 
 
+def adv_train_epoch(model, device, train_loader,
+                    optimizer, epoch, loss_fn,
+                    eps=0.03, n_steps=5):
+    """
+    Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
+    """
+    model = model.to(device)
+    batch_size = train_loader.batch_size
+
+
+    with tqdm(total=len(train_loader)) as t:
+        for batch_idx, (data, target) in enumerate(train_loader):
+            data, target = data.to(device), target.to(device)
+
+            # Adv training step
+            model.eval()
+            advx = apgd(model, data, target,
+                        eps=eps, norm=float('inf'), n_iter=n_steps)
+            model.train()
+            adv_output = model(advx)
+            loss = loss_fn(input=adv_output, target=target)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            t.set_postfix(
+                epoch='{}'.format(epoch),
+                compl='[{}/{} ({:.0f}%)]'.format(
+                    batch_idx * len(data),
+                    len(train_loader.dataset),
+                    100. * batch_idx / len(train_loader)),
+                loss='{:.4f}'.format(loss.item()))
+            # loss_ce='{:.4f}'.format(np.array(ce_cumul).mean()),
+            # loss_pc='{:.4f}'.format(np.array(pc_cumul).mean()))
+            t.update()
+    return
+
 def adv_pc_train_epoch(model, old_model, device, train_loader, 
                     optimizer, epoch, loss_fn, mixmse=False,
                     eps=0.03, n_steps=5):

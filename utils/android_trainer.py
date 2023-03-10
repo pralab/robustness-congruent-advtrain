@@ -169,7 +169,6 @@ class AndroidTemporalTrainer:
                                                       start=i + self.train_size - self.val_size,
                                                       n_months=self.val_size)
 
-
             ############################
             # TRAIN
             ############################
@@ -200,6 +199,11 @@ class AndroidTemporalTrainer:
             X_test_i, y_test_i, test_idxs = ds_stack(X, y,
                                                      start=self.train_size + i,
                                                      n_months=self.test_size)
+
+            # print(f"Train: {X_train_i.shape}")
+            # # print(f"Val: {X_val_i.shape}")
+            # print(f"Test: {X_test_i.shape}")
+
             preds = self._clf.predict(X_test_i)
             performance_metrics = compute_all_metrics(preds, y_test_i)
 

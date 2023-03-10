@@ -111,6 +111,10 @@ FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
+def join(*args):
+    path = fm.join(*args).replace('\\', '/')
+    return path
+
 def set_all_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -227,7 +231,11 @@ def rotate(x, theta):
     theta = np.radians(theta)
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
+
+    center = x.mean(axis=0)
+    x = x - center
     x_rot = R.dot(x.T).T
+    x_rot = x_rot + center
 
     # import matplotlib.pyplot as plt
     #

@@ -1,9 +1,9 @@
 import os
-from os.path import join, isdir
+from os.path import isdir
 import pickle as pkl
 import pandas as pd
 import numpy as np
-from utils.utils import MODEL_NAMES
+from utils.utils import MODEL_NAMES, join
 from utils.eval import compute_nflips, compute_common_nflips
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
@@ -463,12 +463,12 @@ def table_model_results(model_sel=(1,3,5,6),
                         losses=('PCT', 'MixMSE', 'MixMSE(NF)'),
                         diff=False, perc=False):
     # 4 Folders, clean/advx and standard/AT
-    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_clean = 'results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR'
     root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    root_clean_AT = 'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR'
     root_advx_AT = f"{root_clean_AT}/advx_ft"
 
-    single_model_res_path = join('results/single_models_res')
+    single_model_res_path = 'results/single_models_res'
     if not os.path.isdir(single_model_res_path):
         os.mkdir(single_model_res_path)
 
@@ -568,8 +568,13 @@ def table_model_results(model_sel=(1,3,5,6),
         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
                                 float_format='%.2f')
 
-    model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
-                                      keys=[keys[i] for i in model_sel])
+    # model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
+    #                                   keys=[keys[i] for i in model_sel])
+    keys = [key.replace('old-', 'M').replace('_new-', ' - M') for key in keys]
+
+    model_results_df_list = pd.concat(model_results_df_list,
+                                      keys=keys)
+    model_results_df_list.to_csv('results/all_results_table.csv')
     latex_table(model_results_df_list, diff=diff, perc=perc)
 
 
@@ -705,9 +710,47 @@ def plot_histogram(path='results/single_models_res'):
     print("")
 
 
+def evaluate_ensemble():
+    result_path = 'results'
+    old_ensemble_id = [1,2,3]
+    new_ensemble_id = [4,5,6]
+
+    def get_ensemble_preds(ensemble_ids):
+        ensemble_preds = []
+        for model_id in ensemble_ids:
+            model_name = MODEL_NAMES[model_id]
+            path = join(result_path, 'advx', model_name, 'correct_preds.gz')
+            with open(path, 'rb') as f:
+                preds = pkl.load(f)
+            ensemble_preds.append(preds.tolist())
+
+        ensemble_preds = np.array(ensemble_preds)
+        ensemble_preds = (ensemble_preds.mean(axis=0)>0.5)
+        return ensemble_preds
+    
+    old_ensemble_preds = get_ensemble_preds(old_ensemble_id)
+    new_ensemble_preds = get_ensemble_preds(new_ensemble_id)
+
+    old_ensemble_acc = old_ensemble_preds.mean()
+    new_ensemble_acc = new_ensemble_preds.mean()
+
+    ensemble_nfr = compute_nflips(old_ensemble_preds, new_ensemble_preds)
+
+    print(f"Old Acc: {old_ensemble_acc}")
+    print(f"New Acc: {new_ensemble_acc}")
+    print(f"NFR: {ensemble_nfr}")
+
+
+
+    print("")
+
+
+
+
 
 if __name__ == '__main__':
 
+<<<<<<< HEAD
     main_perf_csv()
 
     # model_sel = tuple(range(1, 7))
@@ -716,6 +759,16 @@ if __name__ == '__main__':
     # losses = ('PCT')#, 'MixMSE')#, 'MixMSE(NF)')
     # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
     # plot_histogram()
+=======
+    # # model_sel = tuple(range(1, 7))
+    model_sel = (1, 3, 5, 6)
+    
+    losses = ('PCT',)#, 'MixMSE(NF)')
+    table_model_results(model_sel=model_sel, losses=losses, diff=False)
+    # # table_model_results(model_sel=model_sel, losses=losses, diff=True)
+    # # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
+    # # plot_histogram()
+>>>>>>> 5a00c22de28298e68adba0f5c2c7e944959a1ea0
 
 
 

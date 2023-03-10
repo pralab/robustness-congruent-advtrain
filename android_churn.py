@@ -68,7 +68,7 @@ def main_train_sequence():
 
         # fname = "results_cw-balanced_tr-12_ts-3_C-[0.01]"
 
-        root = "results/android/prova"
+        root = "results/android/svm_xgrid"
         results_path = os.path.join(root, f"{fname}.pkl")
         if not os.path.isdir(root):
             os.makedirs(root)
