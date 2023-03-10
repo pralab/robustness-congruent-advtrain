@@ -89,7 +89,7 @@ class PCTLoss(BasePCTLoss):
     
     def forward(self, model_output: Tensor, target: Tensor, 
                 old_output=None, batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
-        loss_ce = self.ce(model_output, target.long())
+        loss_ce = self.ce(model_output, target.long())  # compute cross entropy of the output
 
         if old_output is None:
             assert batch_idx is not None
@@ -136,7 +136,9 @@ class MixedPCTLoss(BasePCTLoss):
         self.beta1 = beta1
         self.only_nf = only_nf
 
-        keys = ('old_mse', 'new_mse')
+        self.ce = CrossEntropyLoss()
+
+        keys = ('ce', 'old_mse', 'new_mse')
         self._add_loss_term(keys)
         self.loss_keys = tuple(self.loss_path.keys())
 
@@ -144,7 +146,7 @@ class MixedPCTLoss(BasePCTLoss):
     def forward(self, model_output: Tensor, target: Tensor, 
                 old_output=None, new_output=None, 
                 batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
-
+        loss_ce = self.ce(model_output, target.long())
 
         if old_output is None:
             assert batch_idx is not None
@@ -180,18 +182,17 @@ class MixedPCTLoss(BasePCTLoss):
         D_pc = torch.mean((model_output - outs1).pow(2), dim=1) / 2
         loss_pc1 = torch.mean(f_pc * D_pc)
 
-        #f_pc = ((correct2.type(loss_ce.dtype)))
+        # Distill the new model before finetuning
+        # f_pc = ((correct2.type(loss_ce.dtype)))
         D_pc = torch.mean((model_output - outs2).pow(2), dim=1) / 2
-        loss_pc2 = torch.mean(D_pc)
+        loss_pc2 = self.alpha1 * torch.mean(D_pc)
 
 
         # # combine CE loss and PCT loss
-        #loss = loss_ce + self.gamma1 * loss_pc
-
-        loss = loss_pc1 + loss_pc2
+        loss = loss_ce + loss_pc1 + loss_pc2
 
         if self.keep_loss_path:
-            self._update_loss_path((loss, loss_pc1, loss_pc2), self.loss_keys)
+            self._update_loss_path((loss, loss_ce, loss_pc1, loss_pc2), self.loss_keys)
 
-        return loss, loss_pc1, loss_pc2
+        return loss, loss_ce, loss_pc1, loss_pc2
 

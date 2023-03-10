@@ -11,6 +11,12 @@ import os
 from tqdm import tqdm
 import numpy as np
 
+from utils.data import get_cifar10_dataset, MyTensorDataset
+from torch.utils.data import DataLoader
+from utils.visualization import imshow
+from utils.eval import evaluate_acc
+import argparse
+
 # import foolbox as fb
 from adv_lib.attacks.auto_pgd import apgd
 
@@ -105,10 +111,10 @@ def get_models_info_list(root, advx_folder, nopes=None):
     models_info_list = []
     for path, dirs, files in os.walk(root):
         if ('checkpoints' in path) and (len(files)!=0):
-            if 'best_nfr.pt' in files:
-                tr_model_sel = 'best_nfr'                
-            else:
-                tr_model_sel = 'last'
+            # if 'best_nfr.pt' in files:
+            #     tr_model_sel = 'best_nfr'                
+            # else:
+            tr_model_sel = 'last'
             model_path = os.path.join(path, f"{tr_model_sel}.pt")
             robustbench_idx = int(path.split('_new-')[1].split('/')[0])
             robustbench_old_idx = int(path.split('old-')[1].split('_new')[0])
@@ -137,37 +143,26 @@ def get_models_info_list(root, advx_folder, nopes=None):
 
 
 
+def generate_advx_main(root, logger=None):
 
-
-
-
-
-
-
-
-
-
-if __name__ == '__main__':
-    from utils.data import get_cifar10_dataset, MyTensorDataset
-    from torch.utils.data import DataLoader
-    from utils.visualization import imshow
-    from utils.eval import evaluate_acc
-    import argparse
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('-cuda', default=1, type=int, choices=[0, 1])
+    parser.add_argument('-cuda', default=0, type=int, choices=[0, 1])
     parser.add_argument('-exp_id', default=0, type=int, choices=[0, 1])
     args = parser.parse_args()
 
-    batch_size = 200
+    batch_size = 500
     n_steps = 50
     num_samples = 2000
 
 
     set_all_seed(0)
-    roots = ['results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_CLEAN_TR',
-            'results/day-25-11-2022_hr-17-09-48_epochs-12_batchsize-500_TEMPORAL_ADV_TR']
-    root = roots[args.exp_id]
+    
+    # roots = ['results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR',
+    #         'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR']
+    # root = roots[args.exp_id]
+    
+    
     device = f"cuda:{args.cuda}" if torch.cuda.is_available() else 'cpu'
     split_cuda = False
 
@@ -177,10 +172,10 @@ if __name__ == '__main__':
     if not os.path.isdir(advx_folder):
         os.mkdir(advx_folder)
 
-
-    logger = init_logger(advx_folder, fname="progress_advx" + f"_{device}" if split_cuda else "progress_advx")
-    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=[1,2,4,5,6])
-
+    pfname = 'progress_advx_mix_add'
+    if logger is None:
+        logger = init_logger(advx_folder, fname=pfname + f"_{device}" if split_cuda else pfname)
+    models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=None)
 
     if split_cuda:
         half_exps = len(models_info_list) // 2
@@ -209,14 +204,14 @@ if __name__ == '__main__':
     #     escape_flag = 4
     #     while(True):
     #         try:
-    #             # ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-    #             # ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
-    #             # # if not os.path.exists(ds_path):
-    #             # generate_advx_ds(model=model, ds_loader=ds_loader, 
-    #             #                 ds_path=ds_path, device=device, n_steps=n_steps)
-    #             # logger.debug("Advx generation completed.")
-    #             # else:
-    #             #     logger.debug('Advx already existing')
+    #             ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+    #             ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+    #             if len(os.listdir(ds_path)) == 0:
+    #                 generate_advx_ds(model=model, ds_loader=ds_loader, 
+    #                                 ds_path=ds_path, device=device, n_steps=n_steps)
+    #                 logger.debug("Advx generation completed.")
+    #             else:
+    #                 logger.debug('Advx already existing')
                 
 
     #             corrects_path = os.path.join(base_path, 'correct_preds.gz')
@@ -251,17 +246,23 @@ if __name__ == '__main__':
     
 
 
-    
     logger.info('>>> PCT Robustness')
     for i, model_info in enumerate(models_info_list):
         logger.info(f"Exp {i+1} / {len(models_info_list)} ->")
+
+        # # todo: REMOVE THIS AFTER RUNNING MIXMSE
+        # if model_info['loss_name'] == 'PCT':
+        #     continue
+        
+        # if 'a-1_' in model_info['hparams']:
+        #     continue
 
         # if not os.path.exists(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz")):                
         model_name = MODEL_NAMES[model_info['robustbench_idx']]
         
         # Load finetuned model
         model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
-        checkpoint = torch.load(model_info['model_path'])
+        checkpoint = torch.load(model_info['model_path'], map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
 
         ds_path = os.path.join(model_info['advx_path'], 'ts')
@@ -324,3 +325,12 @@ if __name__ == '__main__':
                 break
 
     logger.info("Pipeline completed :D")
+
+
+
+
+
+
+if __name__ == '__main__':
+    root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB'
+    generate_advx_main(root)
