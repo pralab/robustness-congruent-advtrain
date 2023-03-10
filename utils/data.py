@@ -172,6 +172,18 @@ def ds_unstack(X: csr_matrix, y: np.ndarray, idxs: list, preds: list):
     preds_unstack = np.split(preds, idxs)[:-1]
     return X_unstack, y_unstack, preds_unstack
 
+def sort_df(df, b = None, by='NFR(Sum)'):
+    if b is None:
+        # df = df.sort_values(by='Acc(FT)', ascending=False).drop_duplicates(['Models ID', 'Loss', 'NFR(FT)']+other_cols)
+        # df = df.sort_values(by='NFR(FT)').drop_duplicates(['Models ID', 'Loss']+other_cols).sort_index()
+        df = df.sort_values(by=by, ascending=True).drop_duplicates(
+            ['Loss', 'AT'])
+
+    else:
+        df = df.loc[df['Hparams'].str.endswith(f"b={b}")]
+
+    return df
+
 
 if __name__ == '__main__':
     pass
