@@ -125,6 +125,12 @@ def set_all_seed(seed):
 def used_memory_percentage(device):
     return torch.cuda.memory_allocated(device) / torch.cuda.get_device_properties(device).total_memory
 
+def str_to_hps(s):
+    alpha, beta = s.split('_')
+    hps = {}
+    hps['alpha'] = float(alpha.split('-')[-1])
+    hps['beta'] = float(beta.split('-')[-1])
+    return hps
 # Default
 # def parse_args():
 #     parser = argparse.ArgumentParser()

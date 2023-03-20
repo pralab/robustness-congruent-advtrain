@@ -9,6 +9,7 @@ import torch
 import math
 import pickle
 from matplotlib.patches import Rectangle
+from utils.utils import str_to_hps
 
 class InvNormalize(Normalize):
     def __init__(self, normalizer):
@@ -174,6 +175,68 @@ def plot_loss(loss, ax, window=20):
     ax.set_xlabel('iterations')
 
 
+def show_hps_behaviour(root, fig_path):
+    results_list = []
+    for path, dirs, files in os.walk(root):
+        if 'results_last.gz' in files:
+            with open(os.path.join(path, 'results_last.gz'), 'rb') as f:
+                results = pickle.load(f)
+            hps = str_to_hps(path.split('/')[-1])
+            hps['results'] = results
+            
+            results_list.append(hps)
+    
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    accs = []
+    rob_accs = []
+    
+    alphas, betas = [], []
+    for result_dict in results_list:
+        alpha = result_dict['alpha']
+        beta = result_dict['beta']
+        
+        if (beta%0.1 == 0) or beta==0.45:
+            alphas.append(alpha)
+            betas.append(beta)
+            results = result_dict['results']
+            acc = results['clean']['new_acc']
+            old_acc = results['clean']['old_acc']
+            orig_acc = results['clean']['orig_acc']
+            nfr = results['clean']['nfr']
+            orig_nfr = results['clean']['orig_nfr']
+            
+            rob_acc = results['advx']['new_acc']
+            rob_old_acc = results['advx']['old_acc']
+            rob_orig_acc = results['advx']['orig_acc']
+            rob_nfr = results['advx']['nfr']
+            rob_orig_nfr = results['advx']['orig_nfr']
+
+            accs.append(acc)
+            rob_accs.append(rob_acc)
+            
+            axs[0].axhline(y=old_acc, color='k', linestyle='--', label='Acc(M0)')
+            axs[0].axhline(y=orig_acc, color='r', linestyle='--', label='Acc(M1)')
+            
+            
+            axs[1].axhline(y=rob_old_acc, color='k', linestyle='--', label='Rob-Acc(M0)')
+            axs[1].axhline(y=rob_orig_acc, color='r', linestyle='--', label='Rob-Acc(M1)')             
+    
+    axs[0].scatter(betas, accs, color='b', label='Acc(M1+)')
+    axs[1].scatter(betas, rob_accs, color='b', label='Rob-Acc(M1+)')
+    
+    axs[0].set_xlabel('Beta')
+    axs[0].set_ylabel('Accuracy')
+    axs[0].set_ylim(0.7, 1)
+    axs[0].legend()
+
+    axs[1].set_xlabel('Beta')
+    axs[1].set_ylabel('Robust Accuracy')
+    axs[1].set_ylim(0.4, 0.6)
+    axs[1].legend()
+    
+        
+    plt.savefig(fig_path)
+    print("")
 
 ###############################
 # ANDROID
