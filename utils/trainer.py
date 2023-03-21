@@ -4,6 +4,7 @@ from torch import nn
 import numpy as np
 from copy import deepcopy
 from adv_lib.attacks.auto_pgd import apgd
+from random import uniform
 
 def train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
     model = model.to(device)
@@ -31,32 +32,42 @@ def train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
             t.update()
     return
 
-def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
+def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, logger=None):
+    if logger is None:
+        logger = print
+        
     model = model.to(device)
     model.train()
     batch_size = train_loader.batch_size
 
-    with tqdm(total=len(train_loader)) as t:
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
-            optimizer.zero_grad()
-            output = model(data)
-            loss = loss_fn(model_output=output, target=target, old_output=None,
-                        batch_idx=batch_idx, batch_size=batch_size, curr_batch_dim=data.shape[0])
-            loss[0].backward()
-            optimizer.step()
+    # with tqdm(total=len(train_loader)) as t:
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = loss_fn(model_output=output, target=target, old_output=None,
+                    batch_idx=batch_idx, batch_size=batch_size, curr_batch_dim=data.shape[0])
+        loss[0].backward()
+        optimizer.step()
 
-            # ce_cumul.append(loss[1].item())
-            # pc_cumul.append(loss[2].item())
+        # loss_paths = {k: v[-1] for (k, v) in loss_fn.loss_path.items()}
+        # writer.add_scalar("Loss/train", loss_paths, epoch*len(train_loader)+batch_idx)
 
-            t.set_postfix(
-                epoch='{}'.format(epoch),
-                compl='[{}/{} ({:.0f}%)]'.format(
-                    batch_idx * len(data),
-                    len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader)),
-                loss='{:.4f}'.format(loss[0].item()))
-            t.update()
+        # grad_norm_check = next(model.parameters()).grad.mean()
+        # print(f"Grad norm check: {grad_norm_check}")
+        # ce_cumul.append(loss[1].item())
+        # pc_cumul.append(loss[2].item())
+
+        logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader.dataset)} / "\
+        f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}")
+        # t.set_postfix(
+        #     epoch='{}'.format(epoch),
+        #     compl='[{}/{} ({:.0f}%)]'.format(
+        #         batch_idx * len(data),
+        #         len(train_loader.dataset),
+        #         100. * batch_idx / len(train_loader)),
+        #     loss='{:.4f}'.format(loss[0].item()))
+        # t.update()
     return
 
 
@@ -100,70 +111,70 @@ def adv_train_epoch(model, device, train_loader,
 
 def adv_pc_train_epoch(model, old_model, device, train_loader, 
                     optimizer, epoch, loss_fn, mixmse=False,
-                    eps=0.03, n_steps=5):
+                    eps=0.03, n_steps=50, logger=None):
     """
     Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
     """
+    if logger is None:
+        logger = print
+    
     model = model.to(device)
     old_model.eval()
     batch_size = train_loader.batch_size
 
     if mixmse:
         new_model = deepcopy(model).to(device)
+        new_model.eval()
 
-    with tqdm(total=len(train_loader)) as t:
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(device), target.to(device)
-            
-            # # Standard training step
-            # model.train()
-            # output_clean = model(data)        
-            # loss = loss_fn(model_output=output_clean, target=target,
-            #             batch_idx=batch_idx, batch_size=batch_size, curr_batch_dim=data.shape[0])
-            # optimizer.zero_grad()
-            # loss[0].backward()
-            # optimizer.step()
+    # with tqdm(total=len(train_loader)) as t:
+    for batch_idx, (data, target) in enumerate(train_loader):
+        data, target = data.to(device), target.to(device)
 
-            
-            # uniform_noise = torch.rand(data.shape, device=device)
-
-            # noisy_data = data + eps*uniform_noise
-            # noisy_output = model(noisy_data)
-            # noisy_old_output = old_model(noisy_data)
-            # noisy_loss = loss_fn(model_output=noisy_output, target=target, old_output=noisy_old_output)
-
+        advx_flag = uniform(0., 1.) < 0.2
+        if advx_flag:
             model.eval()
             # Adv training step
             advx = apgd(model, data, target,
                         eps=eps, norm=float('inf'), n_iter=n_steps)            
             model.train()
-            adv_output = model(advx)
+        else:
+            advx = data
+        adv_output = model(advx)
 
-            with torch.no_grad():
-                adv_old_output = old_model(advx)
-                if mixmse:
-                    adv_new_output = new_model(advx)
-                        
+        with torch.no_grad():
+            adv_old_output = old_model(advx)
             if mixmse:
-                loss = loss_fn(model_output=adv_output, target=target, 
-                                    old_output=adv_old_output, new_output=adv_new_output)
-            else:
-                loss = loss_fn(model_output=adv_output, target=target, old_output=adv_old_output)
+                adv_new_output = new_model(advx)
+                    
+        if mixmse:
+            loss = loss_fn(model_output=adv_output, target=target, 
+                                old_output=adv_old_output, new_output=adv_new_output)
+        else:
+            loss = loss_fn(model_output=adv_output, target=target, old_output=adv_old_output)
 
-            optimizer.zero_grad()
-            loss[0].backward()
-            optimizer.step()
+        optimizer.zero_grad()
+        loss[0].backward()
+        optimizer.step()
 
-            t.set_postfix(
-                epoch='{}'.format(epoch),
-                compl='[{}/{} ({:.0f}%)]'.format(
-                    batch_idx * len(data),
-                    len(train_loader.dataset),
-                    100. * batch_idx / len(train_loader)),
-                loss='{:.4f}'.format(loss[0].item()))
-                # loss_ce='{:.4f}'.format(np.array(ce_cumul).mean()),
-                # loss_pc='{:.4f}'.format(np.array(pc_cumul).mean()))
-            t.update()
+        logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader)} / advx: {advx_flag} / "\
+        f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}")
+            
+            # epoch='{}'.format(epoch),
+            # compl='[{}/{} ({:.0f}%)]'.format(
+            #     batch_idx * len(data),
+            #     len(train_loader.dataset),
+            #     100. * batch_idx / len(train_loader)),
+            # loss='{:.4f}'.format(loss[0].item()))
+        # t.set_postfix(
+        #     epoch='{}'.format(epoch),
+        #     compl='[{}/{} ({:.0f}%)]'.format(
+        #         batch_idx * len(data),
+        #         len(train_loader.dataset),
+        #         100. * batch_idx / len(train_loader)),
+        #     loss='{:.4f}'.format(loss[0].item()))
+        #     # loss_ce='{:.4f}'.format(np.array(ce_cumul).mean()),
+        #     # loss_pc='{:.4f}'.format(np.array(pc_cumul).mean()))
+        # t.update()
     return
 
 
