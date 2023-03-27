@@ -167,6 +167,9 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
 def plot_loss(loss, ax, window=20):
     loss_df = pd.DataFrame(loss)
 
+    if len(loss['tot']) < window*10:
+        window = 1
+    
     if isinstance(window, int):
         loss_df = loss_df.rolling(window).mean()
 
@@ -175,7 +178,7 @@ def plot_loss(loss, ax, window=20):
     ax.set_xlabel('iterations')
 
 
-def show_hps_behaviour(root, fig_path):
+def show_hps_behaviour(root, fig_path=None, axs=None):
     results_list = []
     for path, dirs, files in os.walk(root):
         if 'results_last.gz' in files:
@@ -192,7 +195,9 @@ def show_hps_behaviour(root, fig_path):
 
     n_rows = 1
     n_cols = 4
-    fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*5))
+    
+    if axs is None:
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*5))
 
     betas = [r['beta'] for r in results_list]
     results_list = [x for _, x in sorted(zip(betas, results_list))]
@@ -260,8 +265,9 @@ def show_hps_behaviour(root, fig_path):
     axs[3].set_ylim(0, 0.08)
     axs[3].legend()
     
-    fig.show()
-    fig.savefig(fig_path)
+    if (fig_path is not None) and (axs is not None):
+        fig.show()
+        fig.savefig(fig_path)
     print("")
 
 ###############################
