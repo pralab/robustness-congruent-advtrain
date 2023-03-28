@@ -8,6 +8,8 @@ import pandas as pd
 import torch
 import math
 import pickle
+from matplotlib.patches import Rectangle
+from utils.utils import str_to_hps
 
 class InvNormalize(Normalize):
     def __init__(self, normalizer):
@@ -52,10 +54,16 @@ def show_loss_from_csv_to_filefig(csv_path, fig_path):
 
 
 def my_plot_decision_regions(model, samples, targets, device='cpu',
-                             flipped_samples=None, ax=None, n_grid_points=100,
-                             fname=None):
+                             flipped_samples=None, adv_flipped_samples=None,
+                             adv_correct=None,
+                             ax=None, n_grid_points=100,
+                             fname=None,  x_adv=None,
+                             eps=1):
     min = torch.min(samples, axis=0)[0] - 1
     max = torch.max(samples, axis=0)[0] + 1
+    min = min*0
+    max = min+1
+
     n_points_per_dim = math.floor(math.sqrt(n_grid_points))
     x = np.linspace(min[0], max[0], n_points_per_dim)
     y = np.linspace(min[1], max[1], n_points_per_dim)
@@ -74,45 +82,94 @@ def my_plot_decision_regions(model, samples, targets, device='cpu',
     # color_regions_idxs = list(map(color_fun, tz))
     # ts = list(targets.numpy().astype(int))
     # color_samples_idxs = list(map(color_fun, ts))
-
+    cmap = plt.cm.hsv
 
     if ax is None:
         fig, ax = plt.subplots()
         title = ('Decision Regions')
-    ax.contourf(xx, yy, Z.cpu(), cmap=plt.cm.coolwarm, alpha=0.3)
+
+    levels = [-1] + Z.unique().tolist()
+    color_list = ['r', 'g', 'b', 'y']
+    ax.contourf(xx, yy, Z.cpu(),
+                # cmap=cmap,
+                levels=levels,
+                colors=color_list,
+                alpha=0.3)
+
+    c_list = [color_list[t] for t in targets]
+
     if flipped_samples is None:
-        ax.scatter(samples.cpu().numpy()[:, 0], samples.numpy()[:, 1],
-                   c=targets.cpu().int().numpy(), alpha=0.7,
-                   cmap=plt.cm.coolwarm, s=20, edgecolors='k')
+        alpha_idx = 1
+        s_idx = 40
+
+        # ax.scatter(samples.cpu().numpy()[:, 0], samples.numpy()[:, 1],
+        #            c=targets.cpu().int().numpy(), alpha=0.7,
+        #            cmap=cmap, s=20, edgecolors='k')
     else:
         alpha_idx = flipped_samples*1
-        alpha_idx[~flipped_samples] = 0.5
-        s_idx = flipped_samples*60
-        s_idx[~flipped_samples] = 20
+        alpha_idx[~flipped_samples] = 0.7
+        s_idx = flipped_samples*80
+        s_idx[~flipped_samples] = 40
         x_list = samples.cpu().numpy()[:, 0]
         y_list = samples.numpy()[:, 1]
-        c_list = targets.cpu().int().numpy()
 
-        # EDGE_COLOR_LIST = ['none', 'k']
-        # edge_fun = lambda idx: EDGE_COLOR_LIST[idx]
-        # edge_list = (flipped_samples*1).to_numpy()
-        # edge_list_idx = list(map(edge_fun, edge_list))
 
-        ax.scatter(x_list, y_list,
-                   c=c_list, alpha=alpha_idx, cmap=plt.cm.coolwarm,
-                   s=s_idx, edgecolors='k')
+    if x_adv is not None:
+        ax.scatter(x_adv.numpy()[:, 0], x_adv.numpy()[:, 1],
+                   c=c_list, alpha=alpha_idx, cmap=cmap,
+                   s=s_idx, edgecolors='k', marker='v')
+        print("")
 
+    ax.scatter(x_list, y_list,
+               c=c_list, alpha=alpha_idx, cmap=cmap,
+               s=s_idx, edgecolors='k')
+
+    if adv_correct is not None:
+        colors = np.array(['k'] * adv_correct.shape[0])
+        colors[adv_correct] = 'r'
+
+        # fig, ax = plt.subplots(1, 1)
+        # ax.scatter(samples.numpy()[:, 0], samples.numpy()[:, 1])
+
+        for i, (x, y) in enumerate(samples.numpy()):
+            linestyle = '--'
+            linewidth = 1
+            if adv_flipped_samples is not None:
+                if adv_flipped_samples[i]:
+                    linestyle = '-'
+                    linewidth = 2
+            color = colors[i]
+            ax.add_patch(Rectangle((x-eps, y-eps), eps*2, eps*2,
+                                   edgecolor=color,
+                                   linestyle=linestyle,
+                                   linewidth=linewidth,
+                                   facecolor='none'))
+
+
+
+
+
+
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    # ax.axis('equal')
     # ax.set_xticks(())
     # ax.set_yticks(())
     # ax.legend()
-    if fname is not None:
-        plt.savefig(f'images/{fname}.png')
+    # fig.show()
+
+    # if fname is not None:
+    #     plt.savefig(f'images/{fname}.png')
     # plt.show()
 
 
 def plot_loss(loss, ax, window=20):
     loss_df = pd.DataFrame(loss)
 
+    if len(loss['tot']) < window*10:
+        window = 1
+    
     if isinstance(window, int):
         loss_df = loss_df.rolling(window).mean()
 
@@ -121,6 +178,97 @@ def plot_loss(loss, ax, window=20):
     ax.set_xlabel('iterations')
 
 
+def show_hps_behaviour(root, fig_path=None, axs=None):
+    results_list = []
+    for path, dirs, files in os.walk(root):
+        if 'results_last.gz' in files:
+            with open(os.path.join(path, 'results_last.gz'), 'rb') as f:
+                results = pickle.load(f)
+
+            if "\\" in path:
+                hps = str_to_hps(path.split('\\')[-1])
+            else:
+                hps = str_to_hps(path.split('/')[-1])
+            hps['results'] = results
+            
+            results_list.append(hps)
+
+    n_rows = 1
+    n_cols = 4
+    
+    if axs is None:
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*5))
+
+    betas = [r['beta'] for r in results_list]
+    results_list = [x for _, x in sorted(zip(betas, results_list))]
+
+    alphas, betas = [], []
+    accs, rob_accs = [], []
+    nfrs, rob_nfrs = [], []
+    for result_dict in results_list:
+        alpha = result_dict['alpha']
+        beta = result_dict['beta']
+        alphas.append(alpha)
+        betas.append(beta)
+
+        # extract performances on clean data
+        results = result_dict['results']
+        acc = results['clean']['new_acc']
+        old_acc = results['clean']['old_acc']
+        orig_acc = results['clean']['orig_acc']
+        nfr = results['clean']['nfr']
+        orig_nfr = results['clean']['orig_nfr']
+
+        # extract performances on advx data
+        rob_acc = results['advx']['new_acc']
+        rob_old_acc = results['advx']['old_acc']
+        rob_orig_acc = results['advx']['orig_acc']
+        rob_nfr = results['advx']['nfr']
+        rob_orig_nfr = results['advx']['orig_nfr']
+
+        accs.append(acc)
+        rob_accs.append(rob_acc)
+        nfrs.append(nfr)
+        rob_nfrs.append(rob_nfr)
+
+    # Accuracy
+    axs[0].axhline(y=old_acc, color='k', linestyle='--', label='Acc(M0)')
+    axs[0].axhline(y=orig_acc, color='r', linestyle='--', label='Acc(M1)')
+    axs[0].plot(betas, accs, color='b', marker='o', label='Acc(M1+)')
+    axs[0].set_xlabel('Beta')
+    axs[0].set_title('Accuracy')
+    axs[0].set_ylim(0.8, 1)
+    axs[0].legend()
+
+    # Robust Accuracy
+    axs[1].axhline(y=rob_old_acc, color='k', linestyle='--', label='Rob-Acc(M0)')
+    axs[1].axhline(y=rob_orig_acc, color='r', linestyle='--', label='Rob-Acc(M1)')
+    axs[1].plot(betas, rob_accs, color='b', marker='o', label='Rob-Acc(M1+)')
+    axs[1].set_xlabel('Beta')
+    axs[1].set_title('Robust Accuracy')
+    axs[1].set_ylim(0.5, 0.7)
+    axs[1].legend()
+
+    # Negative Flips
+    axs[2].axhline(y=orig_nfr, color='r', linestyle='--', label='NFR(M1)')
+    axs[2].plot(betas, nfrs, color='b', marker='o', label='NFR(M1+)')
+    axs[2].set_xlabel('Beta')
+    axs[2].set_title('Negative Flips')
+    axs[2].set_ylim(0, 0.08)
+    axs[2].legend()
+
+    # Robust Negative Flips
+    axs[3].axhline(y=rob_orig_nfr, color='r', linestyle='--', label='Rob-NFR(M1)')
+    axs[3].plot(betas, rob_nfrs, color='b', marker='o', label='Rob-NFR(M1+)')
+    axs[3].set_xlabel('Beta')
+    axs[3].set_title('Robust Negative Flips')
+    axs[3].set_ylim(0, 0.08)
+    axs[3].legend()
+    
+    if (fig_path is not None) and (axs is not None):
+        fig.show()
+        fig.savefig(fig_path)
+    print("")
 
 ###############################
 # ANDROID
@@ -156,7 +304,7 @@ def plot_results_android(results, ax, i=0):
         old_nfr_tot = np.array([math.nan] + results[0]['nfr_tot'][1:])
         nfr_pos = nfr_pos - old_nfr_pos
         nfr_neg = nfr_neg - old_nfr_neg
-        nfr_mean = nfr_mean - (old_nfr_pos - old_nfr_neg)/2
+        nfr_mean = nfr_mean - (old_nfr_pos + old_nfr_neg)/2
         nfr_tot = nfr_tot - old_nfr_tot
         # ax[2, i].plot(nfr_pos, color='red', marker='v', label='NFR-mw')
         # ax[2, i].plot(nfr_neg, color='green', marker='^', label='NFR-gw')

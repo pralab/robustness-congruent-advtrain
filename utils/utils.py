@@ -111,6 +111,10 @@ FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
+def join(*args):
+    path = fm.join(*args).replace('\\', '/')
+    return path
+
 def set_all_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -121,6 +125,12 @@ def set_all_seed(seed):
 def used_memory_percentage(device):
     return torch.cuda.memory_allocated(device) / torch.cuda.get_device_properties(device).total_memory
 
+def str_to_hps(s):
+    alpha, beta = s.split('_')
+    hps = {}
+    hps['alpha'] = float(alpha.split('-')[-1])
+    hps['beta'] = float(beta.split('-')[-1])
+    return hps
 # Default
 # def parse_args():
 #     parser = argparse.ArgumentParser()
@@ -227,7 +237,11 @@ def rotate(x, theta):
     theta = np.radians(theta)
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c, -s), (s, c)))
+
+    center = x.mean(axis=0)
+    x = x - center
     x_rot = R.dot(x.T).T
+    x_rot = x_rot + center
 
     # import matplotlib.pyplot as plt
     #

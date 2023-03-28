@@ -1,91 +1,36 @@
+# n_tr="50000"
+# n_ts="10000"
+# epochs="12"
+# lr="1e-3"
+# batch_size="500"
+# n_steps="50"
+# n_adv_ts="2000"
+# old_model_ids="1"
+# model_ids="4"
+# loss_names="MixMSE"
+# alphas="0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0"
+# betas="0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9"
+# cuda="0"
 
-###################################################################################
-
-N_EXAMPLES="2000"
-N_TR_EXAMPLES="5000"
-#Attack constants
-EPSILON="0.03"
-N_STEPS="250"
-#Predictions constants
-BATCH_SIZE="200"
-ROOT="data"
-LR='1e-4'
-EPOCHS='100'
-GAMMA1='1'
-GAMMA2='0'
-
-EXP_FT_NAME="tssample-${N_EXAMPLES}_trsamples-${N_TRAIN_SAMPLES}_batchsize-${BATCH_SIZE}_lr-${LR}_g1-${GAMMA1}_g2-${GAMMA2}"
-
-# cmd="nohup python main_pipeline.py -n_examples $N_EXAMPLES -n_tr_examples $N_TR_EXAMPLES -eps $EPSILON -n_steps $N_STEPS -batch_size $BATCH_SIZE"
-cmd="nohup python main_pipeline.py -n_examples $N_EXAMPLES -n_tr_examples $N_TR_EXAMPLES -batch_size $BATCH_SIZE -exp_ft_name $EXP_FT_NAME -gamma1 $GAMMA1 -gamma2 $GAMMA2"
-
-$cmd
-
-# ###################################################################################
-
-# N_EXAMPLES="2000"
-# N_TR_EXAMPLES="5000"
-# #Attack constants
-# EPSILON="0.03"
-# N_STEPS="250"
-# #Predictions constants
-# BATCH_SIZE="1000"
-# ROOT="data"
-# LR='1e-4'
-# EPOCHS='200'
-# GAMMA1='1'
-# GAMMA2='0'
-# CUDA='0'
-
-# # EXP_FT_NAME="tssample-${N_EXAMPLES}_trsamples-${N_TRAIN_SAMPLES}_batchsize-${BATCH_SIZE}_lr-${LR}_g1-${GAMMA1}_g2-${GAMMA2}"
-
-# # cmd="nohup python main_pipeline.py -n_examples $N_EXAMPLES -n_tr_examples $N_TR_EXAMPLES -eps $EPSILON -n_steps $N_STEPS -batch_size $BATCH_SIZE -gamma2 $GAMMA2"
-# cmd="nohup python main_pipeline.py -n_examples $N_EXAMPLES -n_tr_examples $N_TR_EXAMPLES -batch_size $BATCH_SIZE -epochs $EPOCHS -gamma2 $GAMMA2"
-# # EXP_FT_NAME="tssample-${N_EXAMPLES}_trsamples-${N_TR_EXAMPLES}_batchsize-${BATCH_SIZE}_g1-${GAMMA1}_g2-${GAMMA2}"
+#DEBUG
+n_tr="50000"
+n_ts="10000"
+epochs="12"
+lr="1e-3"
+batch_size="500"
+n_steps="50"
+n_adv_ts="2000"
+old_model_ids="1"
+model_ids="4"
+loss_names="PCT MixMSE"
+# alphas="0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0"
+# betas="0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9"
+alphas="0.7"
+betas="0.2"
+cuda="0"
 
 
-# lr1=1
-# lr2=5e-1
-# exp_ft_name_1="gamma1-${lr1}"
-# exp_ft_name_2="gamma1-${lr2}"
-# $cmd -gamma1 $lr1 -exp_ft_name $exp_ft_name_1 -cuda_id 0 & 
-# $cmd -gamma1 $lr2 -exp_ft_name $exp_ft_name_2 -cuda_id 1 &
-# wait
+cmd="nohup python -m train_model -date -n_tr $n_tr -n_ts $n_ts -epochs $epochs -lr $lr -batch_size $batch_size -n_steps $n_steps -n_adv_ts $n_adv_ts -old_model_ids $old_model_ids -model_ids $model_ids -loss_names $loss_names -alphas $alphas -betas $betas" 
 
-# lr1=1e-1
-# lr2=5e-2
-# exp_ft_name_1="gamma1-${lr1}"
-# exp_ft_name_2="gamma1-${lr2}"
-# $cmd -gamma1 $lr1 -exp_ft_name $exp_ft_name_1 -cuda_id 0 & 
-# $cmd -gamma1 $lr2 -exp_ft_name $exp_ft_name_2 -cuda_id 1 &
-# wait
-
-# lr1=1e-2
-# lr2=5e-3
-# exp_ft_name_1="gamma1-${lr1}"
-# exp_ft_name_2="gamma1-${lr2}"
-# $cmd -gamma1 $lr1 -exp_ft_name $exp_ft_name_1 -cuda_id 0 & 
-# $cmd -gamma1 $lr2 -exp_ft_name $exp_ft_name_2 -cuda_id 1 &
-# wait
-
-# lr1=1e-3
-# lr2=5e-4
-# exp_ft_name_1="gamma1-${lr1}"
-# exp_ft_name_2="gamma1-${lr2}"
-# $cmd -gamma1 $lr1 -exp_ft_name $exp_ft_name_1 -cuda_id 0 & 
-# $cmd -gamma1 $lr2 -exp_ft_name $exp_ft_name_2 -cuda_id 1 &
-# wait
-
-# lr1=1e-4
-# lr2=5e-5
-# exp_ft_name_1="gamma1-${lr1}"
-# exp_ft_name_2="gamma1-${lr2}"
-# $cmd -gamma1 $lr1 -exp_ft_name $exp_ft_name_1 -cuda_id 0 & 
-# $cmd -gamma1 $lr2 -exp_ft_name $exp_ft_name_2 -cuda_id 1 &
-# wait
-
-
-# $cmd -lr 1e-2 -cuda_id 0 & $cmd -lr 5e-3 -cuda_id 1
-# wait
-# $cmd -lr 1e-3 -cuda_id 0 & $cmd -lr 5e-4 -cuda_id 1
-# wait
+# $cmd -exp_name WTF_MIXMSE_PCT && 
+$cmd -exp_name WTF_MIXMSE_PCT_AT -adv_tr

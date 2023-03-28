@@ -11,9 +11,13 @@ def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, devi
     
     if old_correct is None:
         old_correct = correct_predictions(old_model, ds_loader, device)
-    old_acc = old_correct.cpu().numpy().mean()
-
     new_correct = correct_predictions(new_model, ds_loader, device)
+
+    n_min = min(old_correct.shape[0], new_correct.shape[0])
+    old_correct = old_correct[:n_min]
+    new_correct = new_correct[:n_min]
+
+    old_acc = old_correct.cpu().numpy().mean()
     nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
     pf_idxs = compute_pflips(old_correct, new_correct, indexes=True)
     new_acc = new_correct.cpu().numpy().mean()
@@ -102,35 +106,6 @@ def compute_common_nflips(clean_nf_idxs, advx_nf_idxs):
     only_acc_nfr = ((clean_nf_idxs) & ~advx_nf_idxs).mean()
     common_nfr = ((clean_nf_idxs) & advx_nf_idxs).mean()
     return only_rob_nfr, only_acc_nfr, common_nfr
-
-def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
-    model = model.to(device)
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        with tqdm(total=len(test_loader)) as t:
-            for batch_idx, (data, target) in enumerate(test_loader):
-                data, target = data.to(device), target.to(device)
-                output = model(data)
-                if loss_fn is not None:
-                    loss = loss_fn(output, target)
-                    test_loss += loss.item()  # sum up batch loss
-                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
-
-                t.set_postfix(
-                    epoch='{}'.format(epoch),
-                    completed='[{}/{} ({:.0f}%)]'.format(
-                        batch_idx * len(data),
-                        len(test_loader.dataset),
-                        100. * batch_idx / len(test_loader)))
-                    # loss='{:.4f}'.format(loss.item()))
-                t.update()
-
-        test_loss /= len(test_loader.dataset)
-    return correct / len(test_loader.dataset)
-
 
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     model = model.to(device)

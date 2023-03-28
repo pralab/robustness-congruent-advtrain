@@ -1,9 +1,9 @@
 import os
-from os.path import join, isdir
+from os.path import isdir
 import pickle as pkl
 import pandas as pd
 import numpy as np
-from utils.utils import MODEL_NAMES
+from utils.utils import MODEL_NAMES, join
 from utils.eval import compute_nflips, compute_common_nflips
 from utils.visualization import plot_loss
 import matplotlib.pyplot as plt
@@ -12,7 +12,7 @@ import seaborn as sns
 from itertools import product
 import pickle
 import math
-from pylatex import LongTable, MultiColumn
+# from pylatex import LongTable, MultiColumn
 import matplotlib
 
 matplotlib.rcParams['mathtext.fontset'] = 'stix'
@@ -81,22 +81,26 @@ def main_plot_results_over_time():
     # df.to_csv(join(root, 'all_models_results2.csv'))
     print("")
 
+#########################################################
+# TO BE RUNNED IN WORKSTATION WITH ALL RESULTS
+#########################################################
 
 def main_perf_csv():
-    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_clean = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB'
     root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    root_clean_AT = 'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR'
     root_advx_AT = f"{root_clean_AT}/advx_ft"
 
-    for root in (root_clean, root_advx, root_clean_AT, root_advx_AT):
+    for root in (root_clean, root_advx):#, root_clean_AT, root_advx_AT):
         performance_csv(root)
-    print("")
+        print("")
+
 
 
 def performance_csv(root, fname="all_models_results"):
     column_names = ['Acc0', 'Acc1', 'NFR1', 'PFR1',
                     'Acc(FT)', 'NFR(FT)', 'PFR(FT)']
-                    
+                    # ,
                     # 'val-Acc(FT)', 'val-NFR(FT)', 'val-PFR(FT)']
     index_name = 'Hparams'
 
@@ -110,7 +114,7 @@ def performance_csv(root, fname="all_models_results"):
             nf_idxs[model_pair_dir] = {}
             loss_dict = {}
             if isdir(model_pair_path):
-                for loss_exp_dir in ['PCT', 'MixMSE', 'MixMSE(NF)']:
+                for loss_exp_dir in ['PCT', 'MixMSE']:
                     loss_exp_path = join(model_pair_path, loss_exp_dir)
                     nf_idxs[model_pair_dir][loss_exp_dir] = {}
                     if isdir(loss_exp_path):
@@ -122,39 +126,54 @@ def performance_csv(root, fname="all_models_results"):
                             params_path = join(loss_exp_path, params_dir)
                             if isdir(params_path):
                                 params_name = params_dir.replace('-', '=').replace('_', ',')                                
-                                if loss_exp_dir.startswith('Mix'):
-                                    params_name = params_name.split(',')[1]
+                                # if loss_exp_dir.startswith('Mix'):
+                                #     params_name = params_name.split(',')[1]
 
-                                if os.path.exists(join(params_path, 'results_best_nfr.gz')):
-                                    with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
-                                        results = pkl.load(f)
-                                        # ckpt = torch.load(join(params_path, 'checkpoints/best_nfr.pt'))
-                                        # val_res = ckpt['perf']
+                                # if os.path.exists(join(params_path, 'results_best_nfr.gz')):
+                                #     with open(join(params_path, 'results_best_nfr.gz'), 'rb') as f:
+                                #         results = pkl.load(f)
+                                #     # with open(join(params_path, 'val_perf_best_nfr.gz'), 'rb') as f:
+                                #     #     val_res = pkl.load(f)
 
-                                elif os.path.exists(join(params_path, 'results_best_acc.gz')):
-                                    with open(join(params_path, 'results_best_acc.gz'), 'rb') as f:
-                                        results = pkl.load(f)
-                                        # ckpt = torch.load(join(params_path, 'checkpoints/best_acc.pt'))
-                                        # val_res = ckpt['perf']
-                                else:
+                                # elif os.path.exists(join(params_path, 'results_best_acc.gz')):
+                                #     with open(join(params_path, 'results_best_acc.gz'), 'rb') as f:
+                                #         results = pkl.load(f)
+                                #     # with open(join(params_path, 'val_perf_best_acc.gz'), 'rb') as f:
+                                #     #     val_res = pkl.load(f)
+                                # else:
+                                try:
                                     with open(join(params_path, 'results_last.gz'), 'rb') as f:
                                         results = pkl.load(f)
-                                        # ckpt = torch.load(join(params_path, 'checkpoints/last.pt'))
-                                        # val_res = ckpt['perf']
-                                nf_idxs[model_pair_dir][loss_exp_dir][params_name] = results['nf_idxs']
-
-                                acc0 = results['old_acc']
-                                acc1 = results['orig_acc']
-                                nfr1 = results['orig_nfr']
-                                pfr1 = results['orig_pfr']
-                                acc = results['new_acc']
-                                nfr = results['nfr']
-                                pfr = results['pfr']
-
-                                params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, 
-                                                                acc, nfr, pfr]#,
-                                                                # val_res['acc'], val_res['nfr'], val_res['pfr']]
-
+                                    # with open(join(params_path, 'val_perf_last.gz'), 'rb') as f:
+                                    #     val_res = pkl.load(f)
+                                    
+                                    if 'a-10_' in params_dir:
+                                        print("")
+                                                                       
+                                    # fig, ax = plt.subplots()
+                                    # plot_loss(loss=results['loss'], ax=ax)
+                                    # fig.savefig(f"images/{model_pair_dir}_{loss_exp_dir}_{params_dir}")
+                                    
+                                    print(params_path)
+                                    nf_idxs[model_pair_dir][loss_exp_dir][params_name] = results['nf_idxs']
+                                    
+                                    acc0 = results['old_acc']
+                                    acc1 = results['orig_acc']
+                                    nfr1 = results['orig_nfr']
+                                    pfr1 = results['orig_pfr']
+                                    acc = results['new_acc']
+                                    nfr = results['nfr']
+                                    pfr = results['pfr']
+                                    params_df.loc[params_name] = [acc0, acc1, nfr1, pfr1, 
+                                                                    acc, nfr, pfr]
+                                                                    # ,
+                                                                    # val_res['new_acc'], val_res['nfr'], val_res['pfr']]
+                                except:
+                                    params_df.loc[params_name] = [math.nan]*7
+                                    # Insert random nf_idxs, in this case the previous one, just to make the code run
+                                    nf_idxs[model_pair_dir][loss_exp_dir][params_name] = results['nf_idxs']
+                                    
+                                    
                                 i += 1
 
                         idxs = params_df.index
@@ -446,12 +465,12 @@ def table_model_results(model_sel=(1,3,5,6),
                         losses=('PCT', 'MixMSE', 'MixMSE(NF)'),
                         diff=False, perc=False):
     # 4 Folders, clean/advx and standard/AT
-    root_clean = 'results/day-04-11-2022_hr-16-50-24_epochs-12_batchsize-500'
+    root_clean = 'results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR'
     root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = 'results/day-16-11-2022_hr-15-14-52_epochs-12_batchsize-500_AT'
+    root_clean_AT = 'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR'
     root_advx_AT = f"{root_clean_AT}/advx_ft"
 
-    single_model_res_path = join('results/single_models_res')
+    single_model_res_path = 'results/single_models_res'
     if not os.path.isdir(single_model_res_path):
         os.mkdir(single_model_res_path)
 
@@ -551,8 +570,13 @@ def table_model_results(model_sel=(1,3,5,6),
         model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
                                 float_format='%.2f')
 
-    model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
-                                      keys=[keys[i] for i in model_sel])
+    # model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
+    #                                   keys=[keys[i] for i in model_sel])
+    keys = [key.replace('old-', 'M').replace('_new-', ' - M') for key in keys]
+
+    model_results_df_list = pd.concat(model_results_df_list,
+                                      keys=keys)
+    model_results_df_list.to_csv('results/all_results_table.csv')
     latex_table(model_results_df_list, diff=diff, perc=perc)
 
 
@@ -728,18 +752,14 @@ def evaluate_ensemble():
 
 if __name__ == '__main__':
 
+    main_perf_csv()
 
-    evaluate_ensemble()
-
-    
-    # # model_sel = tuple(range(1, 7))
+    # model_sel = tuple(range(1, 7))
     # model_sel = (1, 3, 5, 6)
-    
-    # losses = ('PCT', 'MixMSE')#, 'MixMSE(NF)')
-    # table_model_results(model_sel=model_sel, losses=losses, diff=False)
-    # # table_model_results(model_sel=model_sel, losses=losses, diff=True)
-    # # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
-    # # plot_histogram()
+
+    # losses = ('PCT')#, 'MixMSE')#, 'MixMSE(NF)')
+    # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
+    # plot_histogram()
 
 
 

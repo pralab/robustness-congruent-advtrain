@@ -166,12 +166,12 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
             if not mixed_loss:
                 old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-                pct_loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+                pct_loss_fn = PCTLoss(old_outputs, alpha=alpha_j, beta=beta_j)
             else:
                 old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
                 new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
                 pct_loss_fn = MixedPCTLoss(old_outputs, new_outputs,
-                                           alpha1=alpha_j, beta1=beta_j,
+                                           alpha=alpha_j, beta=beta_j,
                                            only_nf=only_nf)
 
             for epoch in range(n_ft_epochs):
@@ -227,46 +227,45 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
 if __name__ == '__main__':
     random_state = 999
-    for random_state in np.arange(995, 999):
-        centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
-        #centers = np.array([[1, -1], [-1, -1]])
-        cluster_std = 0.6  # standard deviation of the clusters
+    centers = np.array([[1, -1], [-1, -1], [-1, 1], [1, 1]]) # centers of the clusters
+    #centers = np.array([[1, -1], [-1, -1]])
+    cluster_std = 0.6  # standard deviation of the clusters
 
-        alpha = [0.1, 0.5, 1]
-        beta = [1, 2, 5, 10]
-        alpha = beta
+    alpha = [0.1, 0.5, 1]
+    beta = [1, 2, 5, 10]
+    alpha = beta
 
 
-        lr = 1e-3
-        ft_lr = 1e-3
-        n_epochs = 10
-        n_ft_epochs = 10
-        batch_size = 10
-        n = 100
+    lr = 1e-3
+    ft_lr = 1e-3
+    n_epochs = 10
+    n_ft_epochs = 10
+    batch_size = 10
+    n = 100
 
-        mixed_loss = True
-        only_nf = True
+    mixed_loss = True
+    only_nf = True
 
-        eval_trainset = False
-        diff_model_init = True
-        diff_trset_init = False
-        show_losses = True
-        model_class = MLP
-        theta = 0
+    eval_trainset = False
+    diff_model_init = True
+    diff_trset_init = False
+    show_losses = True
+    model_class = MLP
+    theta = 0
 
-        model_name = 'linear' if model_class is MyLinear else 'mlp'
+    model_name = 'linear' if model_class is MyLinear else 'mlp'
 
-        fname = f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
-        #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
+    fname = f"complete_plot_samples-{n}_MLP_{random_state}" #'churn_plot_rotation_drift'
+    #f"churn_plot_nsamples_tr-{eval_trainset}-{n}_m-{model_name}_alpha-{alpha}_beta-{beta}"
 
-        main(model_class=model_class, centers=centers,
-             cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
-             n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
-             lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss, only_nf=only_nf,
-             alpha=alpha, beta=beta,
-             eval_trainset=eval_trainset,
-             diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
-             show_losses=show_losses,
-             fname=fname, random_state=random_state)
+    main(model_class=model_class, centers=centers,
+         cluster_std=cluster_std, theta=theta, n_samples_per_class=n,
+         n_epochs=n_epochs, n_ft_epochs=n_ft_epochs, batch_size=batch_size,
+         lr=lr, ft_lr=ft_lr, mixed_loss=mixed_loss, only_nf=only_nf,
+         alpha=alpha, beta=beta,
+         eval_trainset=eval_trainset,
+         diff_model_init=diff_model_init, diff_trset_init=diff_trset_init,
+         show_losses=show_losses,
+         fname=fname, random_state=random_state)
 
     print("")

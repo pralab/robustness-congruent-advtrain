@@ -39,7 +39,7 @@ def delete_advx_ts(root):
 
 
 if __name__ == '__main__':
-    root = 'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR'
-    
-    delete_non_last_checkpoints(root)
+    # root = 'results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR'
+    root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB/advx_ft'
+    # delete_non_last_checkpoints(root)
     delete_advx_ts(root)

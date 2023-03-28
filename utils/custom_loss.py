@@ -5,6 +5,9 @@ import torch.nn.functional as F
 from typing import Union
 
 class BaseLoss(Module):
+    """
+    This class is just used to save loss information during training
+    """
     def __init__(self, keep_loss_path=True):
         super(BaseLoss, self).__init__()
         self.keep_loss_path = keep_loss_path
@@ -37,15 +40,15 @@ class BasePCTLoss(BaseLoss):
         correct = (preds == target)
         return outs, correct
 
-    def _compute_loss_pc(self, output, old_correct, old_output,
-                         alpha=None, beta=None):
-        alpha = self.alpha1 if alpha is None else alpha
-        beta = self.beta1 if beta is None else beta
+    # def _compute_loss_pc(self, output, old_correct, old_output,
+    #                      alpha=None, beta=None):
+    #     alpha = self.alpha1 if alpha is None else alpha
+    #     beta = self.beta1 if beta is None else beta
 
-        f_pc = self.alpha1 + self.beta1 * old_correct
-        D_pc = torch.mean((output - old_output).pow(2), dim=1) / 2
-        loss_pc = torch.mean(f_pc * D_pc)
-        return loss_pc
+    #     f_pc = self.alpha1 + self.beta1 * old_correct
+    #     D_pc = torch.mean((output - old_output).pow(2), dim=1) / 2
+    #     loss_pc = torch.mean(f_pc * D_pc)
+    #     return loss_pc
 
 
 
@@ -72,16 +75,15 @@ class MyCrossEntropyLoss(BaseLoss, CrossEntropyLoss):
 
 class PCTLoss(BasePCTLoss):
     def __init__(self, old_output_clean=None,
-                gamma1=1, alpha1=0, beta1=1):
+                alpha=0, beta=1):
         super(PCTLoss, self).__init__()
         self.old_output_clean = old_output_clean
-        self.gamma1 = gamma1
-        self.alpha1 = alpha1
-        self.beta1 = beta1
+        self.alpha = alpha
+        self.beta = beta
 
         self.ce = CrossEntropyLoss()
 
-        keys = ('ce', 'pc')
+        keys = ('ce', 'old_dist', 'old_focal')
         self._add_loss_term(keys)
         self.loss_keys = tuple(self.loss_path.keys())
 
@@ -89,7 +91,7 @@ class PCTLoss(BasePCTLoss):
     
     def forward(self, model_output: Tensor, target: Tensor, 
                 old_output=None, batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
-        loss_ce = self.ce(model_output, target.long())
+        loss_ce = self.ce(model_output, target.long())  # compute cross entropy of the output
 
         if old_output is None:
             assert batch_idx is not None
@@ -104,39 +106,46 @@ class PCTLoss(BasePCTLoss):
             preds = torch.argmax(old_outs, dim=1)
             old_correct = (preds == target)
 
-        loss_pc = self._compute_loss_pc(model_output, old_correct, old_outs)
+        D_dist = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
+        loss_distill = torch.mean(D_dist)
+
+        D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
+        loss_focal = torch.mean(old_correct * D_focal)
 
         # # combine CE loss and PCT loss
-        loss = loss_ce + self.gamma1*loss_pc
-
+        loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        # loss = loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        
+        
         if self.keep_loss_path:
-            self._update_loss_path((loss, loss_ce, loss_pc), self.loss_keys)
+            self._update_loss_path((loss, loss_ce, loss_distill, loss_focal), self.loss_keys)
 
-        return loss, loss_ce, loss_pc
+        return loss, loss_ce, loss_distill, loss_focal
 
 
 
 
 class MixedPCTLoss(BasePCTLoss):
-    def __init__(self, output1, output2,
-                 gamma1=1, alpha1=0, beta1=1, only_nf=False):
+    def __init__(self, old_output, new_output,
+                 alpha=0, beta=1, only_nf=False):
         """
 
-        :param output1: outputs of old model on the training set
-        :param output2: outputs of the new model from which we finetune
-        :param gamma1: to deprecate
+        :param old_output: outputs of old model on the training set
+        :param new_output: outputs of the new model from which we finetune
+        :param gamma: to deprecate
         :param alpha1: pure distillation, to deprecate
         :param beta1: bonus for NF, only one useful here
         """
         super(MixedPCTLoss, self).__init__()
-        self.output1 = output1
-        self.output2 = output2
-        self.gamma1 = gamma1
-        self.alpha1 = alpha1
-        self.beta1 = beta1
+        self.old_output = old_output
+        self.new_output = new_output
+        self.alpha = alpha
+        self.beta = beta
         self.only_nf = only_nf
 
-        keys = ('old_mse', 'new_mse')
+        self.ce = CrossEntropyLoss()
+
+        keys = ('ce', 'new_distill', 'old_focal')
         self._add_loss_term(keys)
         self.loss_keys = tuple(self.loss_path.keys())
 
@@ -144,54 +153,61 @@ class MixedPCTLoss(BasePCTLoss):
     def forward(self, model_output: Tensor, target: Tensor, 
                 old_output=None, new_output=None, 
                 batch_idx=None, batch_size=None, curr_batch_dim=None) -> Tensor:
-
+        loss_ce = self.ce(model_output, target.long())
 
         if old_output is None:
+            # This happen when I already computed the outputs on a given dataset, so I just slice depending on
+            # batch index and current dimension
             assert batch_idx is not None
             assert batch_size is not None
             assert curr_batch_dim is not None
             # apply a weighting for each training sample based on old model outputs
-            outs1, correct1 = self._logits_to_corrects(self.output1, target,
+            old_outs, old_correct = self._logits_to_corrects(self.old_output, target,
                                                     batch_idx, batch_size, curr_batch_dim)
 
         else:
-            outs1 = old_output
-            preds = torch.argmax(outs1, dim=1)
-            correct1 = (preds == target)
+            # Otherwise, for example in Adv Training, I have to pass the current output because for a given sample
+            # it changes every time depending on the obtained advx of the sample
+            old_outs = old_output
+            preds = torch.argmax(old_outs, dim=1)
+            old_correct = (preds == target)
         
         if new_output is None:
+            # Same story but considering the "new" model before the first finetuning iteration
             assert batch_idx is not None
             assert batch_size is not None
             assert curr_batch_dim is not None
             # apply a weighting for each training sample based on old model outputs
-            outs2, correct2 = self._logits_to_corrects(self.output2, target,
+            new_outs, new_correct = self._logits_to_corrects(self.new_output, target,
                                                    batch_idx, batch_size, curr_batch_dim)
 
         else:
-            outs2 = new_output
-            preds = torch.argmax(outs2, dim=1)
-            correct2 = (preds == target)
+            new_outs = new_output
+            preds = torch.argmax(new_outs, dim=1)
+            new_correct = (preds == target)
 
+        
+        
         if self.only_nf:
-            correct1 = correct1.logical_and(correct2.logical_not())
+            old_correct = old_correct.logical_and(new_correct.logical_not())
 
-        # apply a weighting for each training sample based on old model outputs
-        f_pc = self.beta1 * correct1
-        D_pc = torch.mean((model_output - outs1).pow(2), dim=1) / 2
-        loss_pc1 = torch.mean(f_pc * D_pc)
+        # print(f"outs sum: {model_output.sum().item()}")
+        # print(f"old_outs sum: {old_outs.sum().item()}")
+        # print(f"new_outs sum: {new_outs.sum().item()}")
+        
+        # Stay near the initial model before finetuning ...
+        D_dist = torch.mean((model_output - new_outs).pow(2), dim=1) / 2
+        loss_distill = torch.mean(D_dist)
 
-        #f_pc = ((correct2.type(loss_ce.dtype)))
-        D_pc = torch.mean((model_output - outs2).pow(2), dim=1) / 2
-        loss_pc2 = torch.mean(D_pc)
-
+        # ... while mimicking the reference model in the Negative Flips regions
+        D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
+        loss_focal = torch.mean(old_correct * D_focal)
 
         # # combine CE loss and PCT loss
-        #loss = loss_ce + self.gamma1 * loss_pc
-
-        loss = loss_pc1 + loss_pc2
+        loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
 
         if self.keep_loss_path:
-            self._update_loss_path((loss, loss_pc1, loss_pc2), self.loss_keys)
+            self._update_loss_path((loss, loss_ce, loss_distill, loss_focal), self.loss_keys)
 
-        return loss, loss_pc1, loss_pc2
+        return loss, loss_ce, loss_distill, loss_focal
 
