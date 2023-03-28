@@ -23,7 +23,7 @@ from adv_lib.attacks.auto_pgd import apgd
 import time
 
 def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
-                    eps=0.03, n_steps=250):
+                    eps=0.03, n_steps=250, n_max_advx_samples=2000):
     """
     crea una cartella dove per ogni sample salva il singolo tensore in ds_path.
     i sample sono rinominati in ordine crescente come vengono incontrati nel ds originale
@@ -32,6 +32,7 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
     model.to(device)
     model.eval()
 
+    
     k=0 # index for samples
     with tqdm(total=len(ds_loader)) as t:
         for batch_idx, (x,y) in enumerate(ds_loader):
@@ -47,6 +48,8 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
             t.update()
 
             for i in range(len(advx)):
+                if k>=n_max_advx_samples:
+                    return
                 file_path = os.path.join(ds_path, f"{str(k).zfill(10)}.gz")
                 advx = advx.detach().cpu()
                 y = y.detach().cpu()
@@ -54,54 +57,49 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
                 with open(file_path, 'wb') as f:
                     pickle.dump(data, f)
                 k += 1
-    
-    print("")
+                
+    return 
 
 
 
 
-def generate_advx(ds_loader, model_names, eps,
-                  n_steps, exp_folder_name, logger, device, ft_models=False, tr_set=False):
+def generate_advx(ds_loader, model, adv_dir_path, logger, device,
+                  eps=0.03, n_steps=50, model_name=None, n_max_advx_samples=2000):
     """
     ft_models e tr_set specificano solo una cartella diversa rispetto agli advx 
     per i modelli originali sul test set
 
     cartella advx_folder con dentro gli advx WB per ogni modello selezionato
     """
-    advx_folder = fm.join(exp_folder_name, custom_dirname(ADVX_DIRNAME_DEFAULT, 
-                                                        ft_models=ft_models, tr_set=tr_set))
-    if not fm.folder_exist(advx_folder):
-        fm.make_folder(advx_folder)
 
-    nope_list = []
-    for i, model_name in enumerate(model_names):
+    if not os.path.isdir(adv_dir_path):
+        os.makedirs(adv_dir_path)
+    
+    ds = ds_loader.dataset
+    batch_size_temp = ds_loader.batch_size
+    escape_flag = 5
+    while(True):
         try:
-            # ------ LOAD MODEL ------ #
-            logger.debug(f"Loading model {i}: {model_name}")
-            ds_path = fm.join(advx_folder, advx_fname(model_name))
+            ds_loader_temp = DataLoader(ds, batch_size=batch_size_temp)
+            generate_advx_ds(model=model, ds_loader=ds_loader_temp, 
+                            ds_path=adv_dir_path, device=device, eps=eps, n_steps=n_steps, n_max_advx_samples=n_max_advx_samples)
+            logger.debug("Advx generation completed.")
 
-            if model_name in model_names:
-                model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+        except Exception as e:
+            logger.debug(f"Model {model_name} failed: {e}")
+            if escape_flag == 0:
+                logger.debug('Escape flag activated.')
+                break
             else:
-                finetuned_models_folder = fm.join(exp_folder_name, FINETUNING_DIRNAME_DEFAULT)
-                path = fm.join(finetuned_models_folder, f"{model_name}.pt")
-                model.load_state_dict(torch.load(path))
-            model.to(device)
-
-            # ------ COMPUTE ADVX ------ #
-            # todo: fare un po' di debug degli attacchi, logger, verbose ecc
-            start = time.time()
-            generate_advx_ds(model=model, ds_loader=ds_loader, ds_path=ds_path,
-                             logger=logger, device=device, n_steps=n_steps, eps=eps)
-            end = time.time()
-            # logger.debug('Robust accuracy: {:.1%}'.format(1 - success.float().mean()))
-            logger.debug(f"Took {end - start:.2f} s")
-
-        except:            
-            logger.debug(f"{model_name} not processed.")
-            nope_list.append(model_name)
-    print(f"Model not processed:\n{nope_list}")
-    print("")
+                if 'CUDA out of memory' in str(e):                        
+                    batch_size_temp = int(batch_size_temp / 2)
+                    logger.debug(f"Trying with batch size {batch_size_temp}")
+                    escape_flag = escape_flag - 1
+                    continue
+                else:
+                    break
+        else:
+            break
 
 
 
@@ -144,7 +142,6 @@ def get_models_info_list(root, advx_folder, nopes=None):
 
 
 def generate_advx_main(root, logger=None):
-
     
     parser = argparse.ArgumentParser()
     parser.add_argument('-cuda', default=0, type=int, choices=[0, 1])
@@ -269,60 +266,91 @@ def generate_advx_main(root, logger=None):
         if not os.path.isdir(ds_path):
             os.makedirs(ds_path)
         
-        batch_size_temp = batch_size
-        escape_flag = 5
-        while(True):
-            try:
-                # Reload dataset with updated batch_size
-                ds = get_cifar10_dataset(train=False, num_samples=num_samples)
-                ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+        ds = get_cifar10_dataset(train=False, num_samples=num_samples)
+        ds_loader = DataLoader(ds, batch_size=batch_size, shuffle=False)
 
-                generate_advx_ds(model=model, ds_loader=ds_loader, 
-                                ds_path=ds_path, device=device, n_steps=n_steps)
-                logger.debug("Advx generation completed.")
+        generate_advx(ds_loader=ds_loader, model=model, n_steps=n_steps,
+                      adv_dir_path=ds_path, logger=logger, device=device, model_name=model_info['model_path'])
 
 
-                adv_ds = MyTensorDataset(ds_path=ds_path)
-                adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
+        adv_ds = MyTensorDataset(ds_path=ds_path)
+        adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
 
-                # Load WB advx predictions of M0 and M1
-                old_model_name = MODEL_NAMES[model_info['robustbench_old_idx']]
-                with open(os.path.join('results', 'advx', old_model_name, 'correct_preds.gz'), 'rb') as f:
-                    old_correct = pickle.load(f)
-                new_model_name = MODEL_NAMES[model_info['robustbench_idx']]
-                with open(os.path.join('results', 'advx', new_model_name, 'correct_preds.gz'), 'rb') as f:
-                    new_correct = pickle.load(f)
+        # Load WB advx predictions of M0 and M1
+        old_model_name = MODEL_NAMES[model_info['robustbench_old_idx']]
+        with open(os.path.join('results', 'advx', old_model_name, 'correct_preds.gz'), 'rb') as f:
+            old_correct = pickle.load(f)
+        new_model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        with open(os.path.join('results', 'advx', new_model_name, 'correct_preds.gz'), 'rb') as f:
+            new_correct = pickle.load(f)
+        
+        # Get results of model M wrt M0 and M1
+        results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
+                                    old_correct=old_correct,
+                                    device=device)
+        # Add baseline results for comparison
+        results['orig_acc'] = new_correct.cpu().numpy().mean()
+        results['orig_nfr'] = compute_nflips(old_correct, new_correct)
+        results['orig_pfr'] = compute_pflips(old_correct, new_correct)
+
+        with open(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz"), 'wb') as f:
+            pickle.dump(results, f)
+        logger.debug("Preds completed.")
+        
+        # batch_size_temp = batch_size
+        # escape_flag = 5
+        # while(True):
+        #     try:
+        #         # Reload dataset with updated batch_size
+        #         ds_loader = DataLoader(ds, batch_size=batch_size_temp, shuffle=False)
+
+        #         generate_advx_ds(model=model, ds_loader=ds_loader, 
+        #                         ds_path=ds_path, device=device, n_steps=n_steps)
+        #         logger.debug("Advx generation completed.")
+
+
+        #         adv_ds = MyTensorDataset(ds_path=ds_path)
+        #         adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
+
+        #         # Load WB advx predictions of M0 and M1
+        #         old_model_name = MODEL_NAMES[model_info['robustbench_old_idx']]
+        #         with open(os.path.join('results', 'advx', old_model_name, 'correct_preds.gz'), 'rb') as f:
+        #             old_correct = pickle.load(f)
+        #         new_model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        #         with open(os.path.join('results', 'advx', new_model_name, 'correct_preds.gz'), 'rb') as f:
+        #             new_correct = pickle.load(f)
                 
-                # Get results of model M wrt M0 and M1
-                results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
-                                            old_correct=old_correct,
-                                            device=device)
-                # Add baseline results for comparison
-                results['orig_acc'] = new_correct.cpu().numpy().mean()
-                results['orig_nfr'] = compute_nflips(old_correct, new_correct)
-                results['orig_pfr'] = compute_pflips(old_correct, new_correct)
+        #         # Get results of model M wrt M0 and M1
+        #         results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
+        #                                     old_correct=old_correct,
+        #                                     device=device)
+        #         # Add baseline results for comparison
+        #         results['orig_acc'] = new_correct.cpu().numpy().mean()
+        #         results['orig_nfr'] = compute_nflips(old_correct, new_correct)
+        #         results['orig_pfr'] = compute_pflips(old_correct, new_correct)
 
-                with open(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz"), 'wb') as f:
-                    pickle.dump(results, f)
-                logger.debug("Preds completed.")
-                # else:
-                #     logger.debug('Advx already existing.')
+        #         with open(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz"), 'wb') as f:
+        #             pickle.dump(results, f)
+        #         logger.debug("Preds completed.")
+        #         # else:
+        #         #     logger.debug('Advx already existing.')
 
-            except Exception as e:
-                logger.debug(f"Model {model_name} failed: {e}")
-                if escape_flag == 0:
-                    logger.debug('Escape flag activated.')
-                    break
-                else:
-                    if 'CUDA out of memory' in str(e):                        
-                        batch_size_temp = int(batch_size_temp / 2)
-                        logger.debug(f"Trying with batch size {batch_size_temp}")
-                        escape_flag = escape_flag - 1
-                        continue
-                    else:
-                        break
-            else:
-                break
+        #     except Exception as e:
+        #         logger.debug(f"Model {model_name} failed: {e}")
+        #         if escape_flag == 0:
+        #             logger.debug('Escape flag activated.')
+        #             break
+        #         else:
+        #             if 'CUDA out of memory' in str(e):                        
+        #                 batch_size_temp = int(batch_size_temp / 2)
+        #                 logger.debug(f"Trying with batch size {batch_size_temp}")
+        #                 escape_flag = escape_flag - 1
+        #                 continue
+        #             else:
+        #                 break
+        #     else:
+        #         break
+
 
     logger.info("Pipeline completed :D")
 
