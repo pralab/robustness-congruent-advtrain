@@ -11,9 +11,13 @@ def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, devi
     
     if old_correct is None:
         old_correct = correct_predictions(old_model, ds_loader, device)
-    old_acc = old_correct.cpu().numpy().mean()
-
     new_correct = correct_predictions(new_model, ds_loader, device)
+
+    n_min = min(old_correct.shape[0], new_correct.shape[0])
+    old_correct = old_correct[:n_min]
+    new_correct = new_correct[:n_min]
+
+    old_acc = old_correct.cpu().numpy().mean()
     nf_idxs = compute_nflips(old_correct, new_correct, indexes=True)
     pf_idxs = compute_pflips(old_correct, new_correct, indexes=True)
     new_acc = new_correct.cpu().numpy().mean()
