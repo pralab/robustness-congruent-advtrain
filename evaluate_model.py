@@ -153,6 +153,8 @@ def performance_csv(root, fname="all_models_results"):
                                     # fig, ax = plt.subplots()
                                     # plot_loss(loss=results['loss'], ax=ax)
                                     # fig.savefig(f"images/{model_pair_dir}_{loss_exp_dir}_{params_dir}")
+                                    
+                                    print(params_path)
                                     nf_idxs[model_pair_dir][loss_exp_dir][params_name] = results['nf_idxs']
                                     
                                     acc0 = results['old_acc']
@@ -750,7 +752,6 @@ def evaluate_ensemble():
 
 if __name__ == '__main__':
 
-<<<<<<< HEAD
     main_perf_csv()
 
     # model_sel = tuple(range(1, 7))
@@ -759,16 +760,6 @@ if __name__ == '__main__':
     # losses = ('PCT')#, 'MixMSE')#, 'MixMSE(NF)')
     # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
     # plot_histogram()
-=======
-    # # model_sel = tuple(range(1, 7))
-    model_sel = (1, 3, 5, 6)
-    
-    losses = ('PCT',)#, 'MixMSE(NF)')
-    table_model_results(model_sel=model_sel, losses=losses, diff=False)
-    # # table_model_results(model_sel=model_sel, losses=losses, diff=True)
-    # # table_model_results(model_sel=model_sel, losses=losses, diff=False, perc=True)
-    # # plot_histogram()
->>>>>>> 5a00c22de28298e68adba0f5c2c7e944959a1ea0
 
 
 
