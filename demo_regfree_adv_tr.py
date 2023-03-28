@@ -190,7 +190,7 @@ def train_plot(model_class, centers, cluster_std=1., theta=0.,
             loss_fn = None
         else:
             old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-            loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+            loss_fn = PCTLoss(old_outputs, alpha=alpha_j, beta=beta_j)
 
         new_model, new_loss_fn = demo_train(model_class=model_class,
                                             input_size=n_features, output_size=len(centers),

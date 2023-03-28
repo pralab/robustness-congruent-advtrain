@@ -166,12 +166,12 @@ def main(model_class, centers, cluster_std=1., theta=0., n_samples_per_class=100
 
             if not mixed_loss:
                 old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
-                pct_loss_fn = PCTLoss(old_outputs, alpha1=alpha_j, beta1=beta_j)
+                pct_loss_fn = PCTLoss(old_outputs, alpha=alpha_j, beta=beta_j)
             else:
                 old_outputs = get_ds_outputs(old_model, tr_loader['new'], device)
                 new_outputs = get_ds_outputs(new_model, tr_loader['new'], device)
                 pct_loss_fn = MixedPCTLoss(old_outputs, new_outputs,
-                                           alpha1=alpha_j, beta1=beta_j,
+                                           alpha=alpha_j, beta=beta_j,
                                            only_nf=only_nf)
 
             for epoch in range(n_ft_epochs):
