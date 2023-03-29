@@ -116,14 +116,14 @@ def train_pct_model(model, old_model,
     if not os.path.isdir(checkpoints_dir):
         os.mkdir(checkpoints_dir)
 
-    # Compute starting performances in validation set
-    results = get_pct_results(new_model=model, ds_loader=val_loader, 
-                            old_model=old_model, device=device)
-    # Compute acc of old model
-    # initialize the best acc and best nfr of the current model as the starting ones
-    old_acc, best_acc, best_nfr = results['old_acc'], results['new_acc'], results['nfr']
+    # # Compute starting performances in validation set
+    # results = get_pct_results(new_model=model, ds_loader=val_loader, 
+    #                         old_model=old_model, device=device)
+    # # Compute acc of old model
+    # # initialize the best acc and best nfr of the current model as the starting ones
+    # old_acc, best_acc, best_nfr = results['old_acc'], results['new_acc'], results['nfr']
 
-    set_all_seed(0)
+    set_all_seed(random_seed)
     # Start the training loop...
     for e in range(epochs):
         if not adv_training:
@@ -138,13 +138,13 @@ def train_pct_model(model, old_model,
             
             
         # check performance on validation
-        val_results = get_pct_results(new_model=model, ds_loader=val_loader, 
-                        old_model=old_model, device=device)
-        acc, nfr, pfr = val_results['new_acc'], val_results['nfr'], val_results['pfr']        
-        print(f"Epoch {e}, OldAcc: {old_acc*100:.3f}%, "\
-                f"NewAcc: {acc*100:.3f}%, "\
-                f"NFR: {nfr*100:.3f}%, "\
-                f"PFR: {pfr*100:.3f}%")
+        # val_results = get_pct_results(new_model=model, ds_loader=val_loader, 
+        #                 old_model=old_model, device=device)
+        # acc, nfr, pfr = val_results['new_acc'], val_results['nfr'], val_results['pfr']        
+        # print(f"Epoch {e}, OldAcc: {old_acc*100:.3f}%, "\
+        #         f"NewAcc: {acc*100:.3f}%, "\
+        #         f"NFR: {nfr*100:.3f}%, "\
+        #         f"PFR: {pfr*100:.3f}%")
         # if writer is not None:
         #     writer.add_scalar('Accuracy/validation', acc, e)
         #     writer.add_scalar('Accuracy/validation', acc, e)
@@ -173,8 +173,8 @@ def train_pct_model(model, old_model,
 
     # Save the model after the last epoch
     torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
-    with open(os.path.join(exp_dir, 'val_perf_last.gz'), 'wb') as f:
-        pickle.dump(val_results, f)
+    # with open(os.path.join(exp_dir, 'val_perf_last.gz'), 'wb') as f:
+    #     pickle.dump(val_results, f)
 
 
 def select_model_from_validation(loss_dir_path, alphas, betas):
@@ -253,7 +253,7 @@ def train_pct_pipeline(args):
     device = torch.device(f"cuda:{args.cuda}" if torch.cuda.is_available()
                 else "cpu")
 
-    random_seed=args.random_seed
+    # random_seed=args.random_seed
 
     trainable_layers = None
 
@@ -303,13 +303,16 @@ def train_pct_pipeline(args):
             model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
             # Starting test set performances
             logger.debug('Get baseline results')
-            base_results = get_pct_results(new_model=model, ds_loader=test_loader, 
-                                            old_model=old_model,
-                                            device=device)
+            
+            base_results = {}
+            for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
+                base_results[ds_name] = get_pct_results(new_model=model, ds_loader=ds_loader, 
+                                                old_model=old_model,
+                                                device=device)
 
-            logger.info(print_perf("\n>>> Starting test perf \n",
-                base_results['old_acc'], base_results['new_acc'], 
-                base_results['nfr'], base_results['pfr']))     
+                # logger.info(print_perf("\n>>> Starting {ds_name} perf \n",
+                #     base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
+                #     base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
 
             #############################
             # LOSS TYPE LEVEL
@@ -322,7 +325,13 @@ def train_pct_pipeline(args):
                 #############################
                 # HYPERPARAMETERS LEVEL
                 #############################
-                for alpha, beta in zip(args.alphas, args.betas):
+                
+                alphas = args.alphas_pct if loss_name=='PCT' else args.alphas_mix
+                betas = args.betas_pct if loss_name=='PCT' else args.betas_mix
+                
+                for alpha, beta in zip(alphas, betas):
+                    # if loss_name=='PCT':
+                    #     alpha, beta = int(alpha), int(beta)
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
                     params_dir = f"a-{alpha}_b-{beta}"
                     params_dir_path = os.path.join(loss_dir_path, params_dir)
@@ -336,15 +345,13 @@ def train_pct_pipeline(args):
                         #####################################
                         model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
                         
-                        train_pct_model(model=model, old_model=old_model,
-                                        train_loader=train_loader, val_loader=val_loader,
-                                        epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=random_seed, device=device,
-                                        alpha=alpha, beta=beta, trainable_layers=trainable_layers,
-                                        adv_training=args.adv_tr,
-                                        logger=logger, exp_dir=params_dir_path)#, writer=writer)
-
-                        
-                        logger.debug('Evaluating finetuned model...')
+                        if not args.test_only:
+                            train_pct_model(model=model, old_model=old_model,
+                                            train_loader=train_loader, val_loader=val_loader,
+                                            epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
+                                            alpha=alpha, beta=beta, trainable_layers=trainable_layers,
+                                            adv_training=args.adv_tr,
+                                            logger=logger, exp_dir=params_dir_path)#, writer=writer)
 
                         #####################################
                         # SAVE CLEAN RESULTS
@@ -353,91 +360,110 @@ def train_pct_pipeline(args):
                         checkpoint = torch.load(model_fname)
                         model.load_state_dict(checkpoint['model_state_dict'])
                         
-                        results = {}
-                        try:  
-                            set_all_seed(0)
-                            clean_results = get_pct_results(new_model=model, ds_loader=test_loader, 
-                                                        old_correct=base_results['old_correct'],
-                                                        device=device)
-                            clean_results['loss'] = checkpoint['loss'].loss_path
-                            clean_results['orig_acc'] = base_results['new_acc']
-                            clean_results['orig_nfr'] = base_results['nfr']
-                            clean_results['orig_pfr'] = base_results['pfr']
+                        for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
+                            logger.debug(f'Evaluating {ds_name} set ...')
+                            results = {}
+                            try:  
+                                set_all_seed(args.random_seed)
+                                clean_results = get_pct_results(new_model=model, ds_loader=ds_loader, 
+                                                            old_correct=base_results[ds_name]['old_correct'],
+                                                            device=device)
+                                clean_results['loss'] = checkpoint['loss'].loss_path
+                                clean_results['orig_acc'] = base_results[ds_name]['new_acc']
+                                clean_results['orig_nfr'] = base_results[ds_name]['nfr']
+                                clean_results['orig_pfr'] = base_results[ds_name]['pfr']
 
-                            results['clean'] = clean_results
-                            with open(os.path.join(params_dir_path, f"results_last.gz"), 'wb') as f:
-                                pickle.dump(results, f)
-                        except Exception as e:
-                            logger.debug(f"Evaluation failed.")
-                                    
-                        
-                        #####################################
-                        # SAVE ADVX RESULTS
-                        #####################################
-                        try:
-                            adv_dir_path = os.path.join(params_dir_path, 'advx', 'ts')
-
-                            set_all_seed(0)
-                            generate_advx(model=model, ds_loader=test_loader, n_steps=args.n_steps, 
-                                          adv_dir_path=adv_dir_path,
-                                          logger=logger, device=device,
-                                          n_max_advx_samples=args.n_adv_ts)
-                            adv_ts = MyTensorDataset(ds_path=adv_dir_path)
-                            adv_ts_loader = DataLoader(adv_ts, batch_size=test_loader.batch_size)
-
-                            # Load WB advx predictions of M0 and M1
-                            with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], 'correct_preds.gz'), 'rb') as f:
-                                old_correct_adv = pickle.load(f)
-                            with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], 'correct_preds.gz'), 'rb') as f:
-                                new_correct_adv = pickle.load(f)
+                                results['clean'] = clean_results
+                                with open(os.path.join(params_dir_path, f"results_{ds_name}.gz"), 'wb') as f:
+                                    pickle.dump(results, f)
+                            except Exception as e:
+                                logger.debug(f"Evaluation failed.")
+                                        
                             
-                            # Get results of model M wrt M0 and M1
-                            set_all_seed(0)
-                            adv_results = get_pct_results(new_model=model, ds_loader=adv_ts_loader, 
-                                                        old_correct=old_correct_adv,
-                                                        device=device)
-                            # Add baseline results for comparison
-                            adv_results['orig_acc'] = new_correct_adv.cpu().numpy().mean()
-                            adv_results['orig_nfr'] = compute_nflips(old_correct_adv, new_correct_adv)
-                            adv_results['orig_pfr'] = compute_pflips(old_correct_adv, new_correct_adv)
+                            #####################################
+                            # SAVE ADVX RESULTS
+                            #####################################
+                            try:
+                                logger.debug(f'Generating advx on {ds_name} set ...')
+                                adv_dir_path = os.path.join(params_dir_path, 'advx', 'ts')
 
-                            results['advx'] = adv_results
-                            with open(os.path.join(params_dir_path, f"results_last.gz"), 'wb') as f:
-                                pickle.dump(results, f)
+                                set_all_seed(0)
+                                generate_advx(model=model, ds_loader=ds_loader, n_steps=args.n_steps, 
+                                            adv_dir_path=adv_dir_path,
+                                            logger=logger, device=device,
+                                            n_max_advx_samples=args.n_adv_ts)
+                                adv_ds = MyTensorDataset(ds_path=adv_dir_path)
+                                adv_ds_loader = DataLoader(adv_ds, batch_size=test_loader.batch_size)
 
-                            delete_advx_ts(params_dir_path)
-                    
-                            logger.info(f">>> Clean Results")
-                            logger.info(f"Old Acc: {results['clean']['old_acc']}")
-                            logger.info(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}")
-                            logger.info(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}")
-                            logger.info(f">>> Advx Results")
-                            logger.info(f"Old Acc: {results['advx']['old_acc']}")
-                            logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
-                            logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
+                                # Load WB advx predictions of M0 and M1
+                                with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], 'correct_preds.gz'), 'rb') as f:
+                                    old_correct_adv = pickle.load(f)
+                                with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], 'correct_preds.gz'), 'rb') as f:
+                                    new_correct_adv = pickle.load(f)
+                                
+                                # Get results of model M wrt M0 and M1
+                                set_all_seed(args.random_seed)
+                                adv_results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
+                                                            old_correct=old_correct_adv,
+                                                            device=device)
+                                # Add baseline results for comparison
+                                adv_results['orig_acc'] = new_correct_adv.cpu().numpy().mean()
+                                adv_results['orig_nfr'] = compute_nflips(old_correct_adv, new_correct_adv)
+                                adv_results['orig_pfr'] = compute_pflips(old_correct_adv, new_correct_adv)
 
-                        except Exception as e:
-                            print(e)
+                                results['advx'] = adv_results
+                                with open(os.path.join(params_dir_path, f"results_{ds_name}.gz"), 'wb') as f:
+                                    pickle.dump(results, f)
+
+                                delete_advx_ts(params_dir_path)
+                        
+                                logger.info(f">>> Clean Results")
+                                logger.info(f"Old Acc: {results['clean']['old_acc']}")
+                                logger.info(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}")
+                                logger.info(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}")
+                                logger.info(f">>> Advx Results")
+                                logger.info(f"Old Acc: {results['advx']['old_acc']}")
+                                logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
+                                logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
+                            
+
+                                if ds_name=='test':
+                                    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+                                    plot_loss(results['clean']['loss'], ax)
+                                    fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
+                                    
+                                with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
+                                    f.write(f">>> Clean Results\n")
+                                    f.write(f"Old Acc: {results['clean']['old_acc']}\n")
+                                    f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
+                                    f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+                                    f.write(f">>> Advx Results\n")
+                                    f.write(f"Old Acc: {results['advx']['old_acc']}\n")
+                                    f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
+                                    f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+
+                            except Exception as e:
+                                print(e)
                     except Exception as e:
                         logger.debug('Training failed.')
                         logger.debug(e)
                     
-                    with open(os.path.join(params_dir_path, f"results_last.gz"), 'rb') as f:
-                        results = pickle.load(f)
+                #     with open(os.path.join(params_dir_path, f"results_test.gz"), 'rb') as f:
+                #         results = pickle.load(f)
 
-                    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-                    plot_loss(results['clean']['loss'], ax)
-                    fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
-                    with open(os.path.join(params_dir_path, f"test_perf.txt"), 'w') as f:
-                        f.write(f">>> Clean Results\n")
-                        f.write(f"Old Acc: {results['clean']['old_acc']}\n")
-                        f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
-                        f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
-                        f.write(f">>> Advx Results\n")
-                        f.write(f"Old Acc: {results['advx']['old_acc']}\n")
-                        f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
-                        f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
-                # show_hps_behaviour(root=loss_dir_path, fig_path=os.path.join('images', 'MixMSE.png'))
+                #     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+                #     plot_loss(results['clean']['loss'], ax)
+                #     fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
+                #     with open(os.path.join(params_dir_path, f"test_perf.txt"), 'w') as f:
+                #         f.write(f">>> Clean Results\n")
+                #         f.write(f"Old Acc: {results['clean']['old_acc']}\n")
+                #         f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
+                #         f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+                #         f.write(f">>> Advx Results\n")
+                #         f.write(f"Old Acc: {results['advx']['old_acc']}\n")
+                #         f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
+                #         f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+                # # show_hps_behaviour(root=loss_dir_path, fig_path=os.path.join('images', 'MixMSE.png'))
         except Exception as e:
             logger.debug(f"{model_pair_path} not computed.")
             logger.debug(e)
@@ -451,27 +477,31 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
 
-    parser.add_argument('-exp_name', default='DEBUG_AT', type=str)
+    parser.add_argument('-exp_name', default='DEBUG', type=str)
     parser.add_argument('-root', default='results', type=str)
     parser.add_argument('-adv_tr', action='store_true')
 
-    parser.add_argument('-n_tr', default=1000, type=int)   
-    parser.add_argument('-n_ts', default=1000, type=int) 
+    parser.add_argument('-n_tr', default=100, type=int)   
+    parser.add_argument('-n_ts', default=100, type=int) 
 
-    parser.add_argument('-epochs', default=3, type=int)  
+    parser.add_argument('-epochs', default=1, type=int)  
     parser.add_argument('-lr', default=1e-3, type=float)
-    parser.add_argument('-batch_size', default=500, type=int)   
+    parser.add_argument('-batch_size', default=50, type=int)   
     
     parser.add_argument('-n_steps', default=2, type=int)   
-    parser.add_argument('-n_adv_ts', default=500, type=int) 
+    parser.add_argument('-n_adv_ts', default=50, type=int) 
     
     parser.add_argument('-old_model_ids', default=[1], type=int, nargs='+')
     parser.add_argument('-model_ids', default=[4], type=int, nargs='+')
     parser.add_argument('-loss_names', default=['PCT', 'MixMSE'], type=str, nargs='+')
-    parser.add_argument('-alphas', default=[0.7], type=float, nargs='+')
-    parser.add_argument('-betas', default=[0.2], type=float, nargs='+')
+    parser.add_argument('-alphas_mix', default=[0.7], type=float, nargs='+')
+    parser.add_argument('-betas_mix', default=[0.2], type=float, nargs='+')
+    parser.add_argument('-alphas_pct', default=[1], type=int, nargs='+')
+    parser.add_argument('-betas_pct', default=[5], type=int, nargs='+')
     
     parser.add_argument('-date', action='store_true')
+    parser.add_argument('-test_only', action='store_true')
+    
     parser.add_argument('-random_seed', default=0, type=int)
     parser.add_argument('-cuda', default=0, type=int)
     

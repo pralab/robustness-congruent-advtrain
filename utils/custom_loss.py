@@ -113,8 +113,8 @@ class PCTLoss(BasePCTLoss):
         loss_focal = torch.mean(old_correct * D_focal)
 
         # # combine CE loss and PCT loss
-        loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
-        # loss = loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        # loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        loss = loss_ce + self.alpha * loss_distill + self.beta * loss_focal
         
         
         if self.keep_loss_path:

@@ -11,6 +11,42 @@ import math
 pd.set_option('display.max_columns', None)
 
 
+def table_new():
+    path = 'results/day-28-03-2023_hr-17-00-08_PIPELINE_PCT_MIXMSE_AT'
+    
+    rows = []
+    
+    for model_pair_dir in os.listdir(path):
+        rows_new = []
+        model_pair_path = os.path.join(path, model_pair_dir)
+        for loss_dir in os.listdir(model_pair_path):
+            loss_path = os.path.join(model_pair_path, loss_dir)
+            for hparams_dir in os.listdir(loss_path):
+                hparams_path = os.path.join(loss_path, hparams_dir)
+
+                # with open(os.path.join(hparams_path, 'results_val.gz'), 'rb') as f:
+                #     results_val = pickle.load(f)
+                    
+                with open(os.path.join(hparams_path, 'results_test.gz'), 'rb') as f:
+                    results_test = pickle.load(f)
+                
+                acc0, acc1, acc = results_test['clean']['old_acc'], results_test['clean']['orig_acc'], results_test['clean']['new_acc']
+                nfr1, nfr = results_test['clean']['orig_nfr'], results_test['clean']['nfr']
+                rob_acc0, rob_acc1, rob_acc = results_test['advx']['old_acc'], results_test['advx']['orig_acc'], results_test['advx']['new_acc']
+                rob_nfr1, rob_nfr = results_test['advx']['orig_nfr'], results_test['advx']['nfr']
+                
+                Mold = model_pair_dir.split('old-')[-1].split('_new')[0]
+                Mnew = model_pair_dir.split('new-')[-1]
+                rows_new.append([f"M{Mnew} + {loss_dir}-AT", hparams_dir, acc, nfr, rob_acc, rob_nfr])
+        
+        rows_model_i = [[f"M{Mold}", '-', acc, '-', rob_acc, '-'],
+                        [f"M{Mnew}", '-', acc, nfr, rob_acc, rob_nfr]]
+        print("")
+            
+        
+    
+
+
 def hyperparams_table(root='results'):
     # 4 Folders, clean/advx and standard/AT
     root_clean = join(root, 'day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR')
@@ -281,10 +317,11 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files'):
 
 
 if __name__ == '__main__':
-    model_sel = (1, 3, 5, 6)
+    # model_sel = (1, 3, 5, 6)
 
-    losses = ('PCT', 'MixMSE')  # , 'MixMSE(NF)')
-    table_model_results(model_sel=model_sel, losses=losses, diff=False)
+    # losses = ('PCT', 'MixMSE')  # , 'MixMSE(NF)')
+    # table_model_results(model_sel=model_sel, losses=losses, diff=False)
 
     # hyperparams_table(root='results/results_feb_2023_last_iter')
 
+    table_new()
