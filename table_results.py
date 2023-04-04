@@ -8,237 +8,114 @@ import pickle
 import math
 
 
+dict_loss_names = {'PCT-AT': '\pctat',
+                   'PCT': '\pct',
+                   'MixMSE-AT': '\mixmseat',
+                   'MixMSE': '\mixmse',}
+
 pd.set_option('display.max_columns', None)
 
 
-def table_new():
-    path = 'results/day-28-03-2023_hr-17-00-08_PIPELINE_PCT_MIXMSE_AT'
+def table_new(model_ids=None, old_model_ids=None, loss_names=None):
+    path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
     
+    ds_name = 'test'
+
+    # for ds_name in ['test', 'val']:
     rows = []
     
-    for model_pair_dir in os.listdir(path):
-        rows_new = []
+    if (model_ids is not None) and (old_model_ids is not None):
+        model_pair_dirs = [f"old-{old_id}_new-{new_id}" for (old_id, new_id) in zip(old_model_ids, model_ids)]
+    else:
+        model_pair_dirs = list(os.walk(path))[0][1]
+    
+
+    columns = ['Models ID', 'Loss', 'Hparams', 'Acc', 'RobAcc', 'NFR', 'R-NFR', 'B-NFR', 'S-NFR']
+    
+    """
+    Per il validation posso mettere altre colonne delle performance corrispondenti al validation
+    e poi usare la stessa funz sort_df però indicando colonne del validation, così da fare poi lo slicing necessario
+    sul test set
+    """
+    
+    model_results_df_list = []
+    keys = []
+    for model_pair_dir in model_pair_dirs:
+        rows_ft = []
         model_pair_path = os.path.join(path, model_pair_dir)
-        for loss_dir in os.listdir(model_pair_path):
+        
+        if loss_names is None:
+            loss_names = list(os.walk(model_pair_path))[0][1]
+            
+        for loss_dir in loss_names:
             loss_path = os.path.join(model_pair_path, loss_dir)
-            for hparams_dir in os.listdir(loss_path):
+            
+            for hparams_dir in list(os.walk(loss_path))[0][1]:
                 hparams_path = os.path.join(loss_path, hparams_dir)
 
                 # with open(os.path.join(hparams_path, 'results_val.gz'), 'rb') as f:
                 #     results_val = pickle.load(f)
+                
+                try:
+                    with open(os.path.join(hparams_path, f"results_{ds_name}.gz"), 'rb') as f:
+                        results_test = pickle.load(f)
+                except:
+                    try:
+                        with open(os.path.join(hparams_path, f"results_last.gz"), 'rb') as f:
+                            results_test = pickle.load(f)
+                    except:
+                        rows_ft.append([f"M{Mnew} + {loss_dir}", hparams_dir, math.nan, math.nan, math.nan, math.nan])
+                        continue
                     
-                with open(os.path.join(hparams_path, 'results_test.gz'), 'rb') as f:
-                    results_test = pickle.load(f)
                 
                 acc0, acc1, acc = results_test['clean']['old_acc'], results_test['clean']['orig_acc'], results_test['clean']['new_acc']
                 nfr1, nfr = results_test['clean']['orig_nfr'], results_test['clean']['nfr']
                 rob_acc0, rob_acc1, rob_acc = results_test['advx']['old_acc'], results_test['advx']['orig_acc'], results_test['advx']['new_acc']
                 rob_nfr1, rob_nfr = results_test['advx']['orig_nfr'], results_test['advx']['nfr']
                 
-                Mold = model_pair_dir.split('old-')[-1].split('_new')[0]
-                Mnew = model_pair_dir.split('new-')[-1]
-                rows_new.append([f"M{Mnew} + {loss_dir}-AT", hparams_dir, acc, nfr, rob_acc, rob_nfr])
+                # common_nfr1 = 
+                # sum_nfr1 = 
+                # todo: calcolare common_nfr1!!! accrocchio da risolvere
+                _, _, common_nfr = compute_common_nflips(results_test['clean']['nf_idxs'], results_test['advx']['nf_idxs'])
+                sum_nfr = nfr + rob_nfr - common_nfr
+                sum_nfr1 = nfr1 + rob_nfr1
+
+                # rows_new.append([f"M{Mnew} + {loss_dir}", hparams_dir, acc, rob_acc, nfr, rob_nfr, common_nfr, sum_nfr])
+                rows_ft.append([loss_dir, hparams_dir, acc, rob_acc, nfr, rob_nfr, common_nfr, sum_nfr])
         
-        rows_model_i = [[f"M{Mold}", '-', acc, '-', rob_acc, '-'],
-                        [f"M{Mnew}", '-', acc, nfr, rob_acc, rob_nfr]]
-        print("")
+        
+        # rows_model_i = [[f"M{Mold}", math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
+        #                 [f"M{Mnew}", math.nan, acc1, rob_acc1, nfr1, rob_nfr1, math.nan, sum_nfr1]]
+        rows_old_new = [['old', math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
+                        ['new', math.nan, acc1, rob_acc1, nfr1, rob_nfr1, math.nan, sum_nfr1]]
+        model_base_results_df = pd.DataFrame(data=rows_old_new, columns=columns[1:])
+        model_ft_results_df = pd.DataFrame(data=rows_ft, columns=columns[1:])
+        model_ft_results_df = model_ft_results_df.sort_values(by='S-NFR', ascending=True).drop_duplicates(['Loss']).sort_index()
+        model_results_df = pd.concat([model_base_results_df, model_ft_results_df])
+        # model_results_df.reset_index(inplace=True, drop=True)
+        model_results_df.set_index('Loss', inplace=True) 
+        model_results_df[columns[3:]] *= 100
+        model_results_df.drop(['Hparams'], axis=1, inplace=True)
+        Mold = model_pair_dir.split('old-')[-1].split('_new')[0]
+        Mnew = model_pair_dir.split('new-')[-1]
+        
+        # keys.append(f"M{Mold}-{Mnew}")
+        keys.append(model_pair_dir)
+        model_results_df_list.append(model_results_df)
+        
+        
+        # rows.extend(rows_old_new + rows_ft)
+        
+    model_results_df_list = pd.concat(model_results_df_list,
+                                      keys=keys)
+    # model_results_df_list.to_csv('results/all_results_table.csv')
+    latex_table(model_results_df_list, dir_out=path)
+    
+
+    print("")
             
         
     
-
-
-def hyperparams_table(root='results'):
-    # 4 Folders, clean/advx and standard/AT
-    root_clean = join(root, 'day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR')
-    root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = join(root, 'day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR')
-    root_advx_AT = f"{root_clean_AT}/advx_ft"
-
-
-    # Table for standard training
-    df_clean = pd.read_csv(join(root_clean, 'all_models_results.csv'))
-    df_advx = pd.read_csv(join(root_advx, 'all_models_results.csv'))
-    df_clean.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
-    df_advx = df_advx[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
-        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
-                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
-    df = pd.concat([df_clean, df_advx], axis=1)
-    # At this point df has all results of PCT, for all hyperparams, both for clean and adv data, acc, NFR ecc
-
-    # Table for AT
-    df_clean_at = pd.read_csv(join(root_clean_AT, 'all_models_results.csv'))
-    df_advx_at = pd.read_csv(join(root_advx_AT, 'all_models_results.csv'))
-    df_clean_at.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
-    df_advx_at = df_advx_at[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
-        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
-                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
-    df_at = pd.concat([df_clean_at, df_advx_at], axis=1)
-    # Same as df, but all the results with adversarial training
-
-    # Merge the 2 tables
-    df['AT'] = False
-    df_at['AT'] = True
-    df = pd.concat([df, df_at])
-    df.reset_index(inplace=True, drop=True)
-
-    # Load and compute common churn between clean and advx data
-    nf_idxs = {}
-    for root_i, name in zip((root_clean, root_advx, root_clean_AT, root_advx_AT),
-                          ("root_clean", "root_advx", "root_clean_AT", "root_advx_AT")):
-        with open(join(root_i, 'all_nf_idxs.pkl'), 'rb') as f:
-            nf_idxs[name] = pickle.load(f)
-
-    common_nfs = []
-    for i, r in df.iterrows():
-        nf_idxs_clean = nf_idxs['root_clean' if not r['AT'] else 'root_clean_AT']
-        nf_idxs_clean = nf_idxs_clean[r['Models ID']][r['Loss']][r['Hparams']]
-        nf_idxs_advx = nf_idxs['root_advx' if not r['AT'] else 'root_advx_AT']
-        nf_idxs_advx = nf_idxs_advx[r['Models ID']][r['Loss']][r['Hparams']]
-        nf_idxs_clean = nf_idxs_clean[:nf_idxs_advx.shape[0]]
-        _, _, common_nfr = compute_common_nflips(nf_idxs_clean, nf_idxs_advx)
-        # nfr_row = nf_idxs_clean.mean()*100
-        common_nfs.append(common_nfr*100)
-
-    # add the common churn and sum column
-    df['NFR (Both)'] = common_nfs
-    df['NFR(Sum)'] = df['NFR(FT)'] + df['Rob NFR(FT)'] - df['NFR (Both)']
-
-
-    print("")
-
-def table_model_results(model_sel=(1,3,5,6),
-                        losses=('PCT', 'MixMSE', 'MixMSE(NF)'),
-                        diff=False, perc=False,
-                        root='results'):
-    """
-    This function takes the results generated by evaluate_model.performance_csv.py
-    """
-    # 4 Folders, clean/advx and standard/AT
-    root_clean = join(root, 'day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB')
-    root_advx = f"{root_clean}/advx_ft"
-    root_clean_AT = join(root, 'day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB')
-    root_advx_AT = f"{root_clean_AT}/advx_ft"
-
-    single_model_res_path = 'results/single_models_res'
-    if not os.path.isdir(single_model_res_path):
-        os.mkdir(single_model_res_path)
-
-    # Table for standard training
-    df_clean = pd.read_csv(join(root_clean, 'all_models_results.csv'))
-    df_advx = pd.read_csv(join(root_advx, 'all_models_results.csv'))
-    df_clean.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
-    df_advx = df_advx[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
-        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
-                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
-    df = pd.concat([df_clean, df_advx], axis=1)
-    # At this point df has all results of PCT, for all hyperparams, both for clean and adv data, acc, NFR ecc
-
-    # Table for AT
-    df_clean_at = pd.read_csv(join(root_clean_AT, 'all_models_results.csv'))
-    df_advx_at = pd.read_csv(join(root_advx_AT, 'all_models_results.csv'))
-    df_clean_at.drop(['PFR1', 'PFR(FT)'], axis=1, inplace=True)
-    df_advx_at = df_advx_at[['Acc0', 'Acc1', 'Acc(FT)', 'NFR1', 'NFR(FT)']].rename(
-        columns={'Acc0': 'Rob Acc0', 'Acc1': 'Rob Acc1', 'NFR1': 'Rob NFR1',
-                 'Acc(FT)': 'Rob Acc(FT)', 'NFR(FT)': 'Rob NFR(FT)'})
-    df_at = pd.concat([df_clean_at, df_advx_at], axis=1)
-    # Same as df, but all the results with adversarial training
-
-    # Merge the 2 tables
-    df['AT'] = False
-    df_at['AT'] = True
-    df = pd.concat([df, df_at])
-
-    # todo: when old-3_new-2 is computed remove!!!
-    df = df[df["Models ID"] != "old-3_new-2"]
-
-    df.reset_index(inplace=True, drop=True)
-
-    # Load and compute common churn between clean and advx data
-    nf_idxs = {}
-    for root_i, name in zip((root_clean, root_advx, root_clean_AT, root_advx_AT),
-                          ("root_clean", "root_advx", "root_clean_AT", "root_advx_AT")):
-        with open(join(root_i, 'all_nf_idxs.pkl'), 'rb') as f:
-            nf_idxs[name] = pickle.load(f)
-
-    common_nfs = []
-    for i, r in df.iterrows():
-        nf_idxs_clean = nf_idxs['root_clean' if not r['AT'] else 'root_clean_AT']
-        nf_idxs_clean = nf_idxs_clean[r['Models ID']][r['Loss']][r['Hparams']]
-        nf_idxs_advx = nf_idxs['root_advx' if not r['AT'] else 'root_advx_AT']
-        nf_idxs_advx = nf_idxs_advx[r['Models ID']][r['Loss']][r['Hparams']]
-        nf_idxs_clean = nf_idxs_clean[:nf_idxs_advx.shape[0]]
-        _, _, common_nfr = compute_common_nflips(nf_idxs_clean, nf_idxs_advx)
-        # nfr_row = nf_idxs_clean.mean()*100
-        common_nfs.append(common_nfr*100)
-
-    # add the common churn and sum column
-    df['NFR (Both)'] = common_nfs
-    df['NFR(Sum)'] = df['NFR(FT)'] + df['Rob NFR(FT)'] - df['NFR (Both)']
-
-    model_results_df_list = []
-    diff_model_res_list = []
-    keys = []
-
-    # Here I take only one result for each model and loss, choosing bw hyperparameters
-    for models_id in df['Models ID'].unique():
-        # Check single models as single table
-        print(f'{"-"*50}\n{models_id} - new -> {MODEL_NAMES[int(models_id.split("new-")[-1])]}')
-        # models_id = df['Models ID'].unique()[3]
-        keys.append(models_id)
-
-        df_model = df.loc[df['Models ID'] == models_id]
-        df_model.drop(['Models ID'], axis=1, inplace=True)
-
-        df_model = sort_df(df_model, b=None, by='Rob NFR(FT)')
-        hparams = list(df_model['Hparams'])
-        df_model.reset_index(inplace=True, drop=True)
-
-        model_results_df = pd.DataFrame(columns=['Acc', 'Rob Acc',
-                                                 'NFR', 'Rob NFR', 'NFR (Both)',
-                                                 'NFR (Sum)'])#, 'Hparams'])
-        model_results_df.index.name = 'model'
-
-        model_results_df.loc['old'] = [df_model['Acc0'][0],
-                                       df_model['Rob Acc0'][0],
-                                       None, None, None, None]
-        model_results_df.loc['new'] = [df_model['Acc1'][0],
-                                       df_model['Rob Acc1'][0],
-                                       df_model['NFR1'][0],
-                                       df_model['Rob NFR1'][0],
-                                       df_model['NFR (Both)'][0],
-                                       df_model['NFR1'][0]
-                                       + df_model['Rob NFR1'][0]
-                                       - df_model['NFR (Both)'][0]]
-        for loss in losses:
-            for at in [False, True]:
-                loss_df = df_model.loc[(df_model['Loss'] == loss) & (df_model['AT'] == at)]
-                if not loss_df.empty:
-                    idx_name = loss if not at else f"{loss}-AT"
-                    model_results_df.loc[idx_name] = [loss_df['Acc(FT)'].item(),
-                                                      loss_df['Rob Acc(FT)'].item(),
-                                                      loss_df['NFR(FT)'].item(),
-                                                      loss_df['Rob NFR(FT)'].item(),
-                                                      loss_df['NFR (Both)'].item(),
-                                                      loss_df['NFR(FT)'].item()
-                                                      + loss_df['Rob NFR(FT)'].item()
-                                                      - loss_df['NFR (Both)'].item()
-                                                      ]
-
-        print(model_results_df)
-        print(f"Hparams: {hparams}")
-        model_results_df_list.append(model_results_df)
-        model_results_df.to_csv(join(single_model_res_path, f"{models_id}.csv"),
-                                float_format='%.2f')
-
-    # model_results_df_list = pd.concat([model_results_df_list[i] for i in model_sel],
-    #                                   keys=[keys[i] for i in model_sel])
-    # keys = [key.replace('old-', 'M').replace('_new-', '_M') for key in keys]
-
-    model_results_df_list = pd.concat(model_results_df_list,
-                                      keys=keys)
-    model_results_df_list.to_csv('results/all_results_table.csv')
-    latex_table(model_results_df_list, diff=diff, perc=perc, dir_out=root)
-
 
 def latex_table(df, diff=False, perc=False, dir_out='latex_files'):
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
@@ -292,6 +169,7 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files'):
         new_index_name = key
         # new_index_name =r"\rotatebox[origin=t]{90}{" + new_index_name + r"}"
         new_index_name = r"\hline \multirow{6}{*}{" + new_index_name + "}"
+        # new_index_name = r"\hline \multirow{6}{*}{" + dict_loss_names[new_index_name] + "}"
         # new_index_name = model_pair
         df = df.rename(index={model_pair: new_index_name})
         print("")
@@ -305,6 +183,10 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files'):
         )
     df_str = df_str.replace(r'\begin{tabular}', r'\resizebox{0.99\linewidth}{!}{\begin{tabular}')
     df_str = df_str.replace(r'\end{tabular}', r'\hline \end{tabular}}')
+    
+    for k,v in dict_loss_names.items():
+        df_str = df_str.replace(k, v)
+    
     eof = ""
     if diff:
         eof = "_diff"
@@ -317,11 +199,17 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files'):
 
 
 if __name__ == '__main__':
-    # model_sel = (1, 3, 5, 6)
-
-    # losses = ('PCT', 'MixMSE')  # , 'MixMSE(NF)')
-    # table_model_results(model_sel=model_sel, losses=losses, diff=False)
-
-    # hyperparams_table(root='results/results_feb_2023_last_iter')
-
-    table_new()
+    old_model_ids = [1,1,2,2,2,3]
+    model_ids = [4,7,4,5,7,2]
+    loss_names = ['PCT', 'PCT-AT', 'MixMSE-AT']
+    
+    table_new(old_model_ids=old_model_ids, model_ids=model_ids, loss_names=loss_names)
+    
+    # path="results/day-25-01-2023_hr-15-38-00_CLEAN_TR_backup"
+    
+    # with open(os.path.join(path, "all_nf_idxs.pkl"), 'rb') as f:
+    #     nf_idxs = pickle.load(f)
+    
+    # print("")
+    
+    # table_model_results()
