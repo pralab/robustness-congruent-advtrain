@@ -11,11 +11,13 @@ import os
 from tqdm import tqdm
 import numpy as np
 
-from utils.data import get_cifar10_dataset, MyTensorDataset
+from utils.data import get_cifar10_dataset, MyTensorDataset, split_train_valid
 from torch.utils.data import DataLoader
 from utils.visualization import imshow
 from utils.eval import evaluate_acc
 import argparse
+
+from manage_files import delete_advx_ts
 
 # import foolbox as fb
 from adv_lib.attacks.auto_pgd import apgd
@@ -139,6 +141,41 @@ def get_models_info_list(root, advx_folder, nopes=None):
             })
     return models_info_list, old_models_idx, new_models_idx
 
+
+def generate_baseline_advx(model_id, ds_name='test'):
+    root = 'results/advx'
+
+    device = f"cuda:0" if torch.cuda.is_available() else 'cpu'
+    logger = init_logger(root, fname=f"logger_{ds_name}")
+    
+    batch_size = 500
+    train_dataset, val_dataset = split_train_valid(
+        get_cifar10_dataset(train=True, shuffle=False, num_samples=None), train_size=0.8)
+    test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=None)
+    # shuffle can be set to True if reference models are evaluated on the fly
+    # without exploiting precomputed outputs
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    # for model_id in [2,3,1]:
+    logger.info(f">>> Model {model_id}")
+    model_name = MODEL_NAMES[model_id]        
+    model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+    adv_dir_path = os.path.join(root, model_name, ds_name)
+    if not os.path.isdir(adv_dir_path):
+        os.makedirs(adv_dir_path)
+    corrects_path = os.path.join(root, model_name, f"correct_preds_{ds_name}.gz")
+    
+    ds_loader = test_loader if ds_name=='test' else val_loader
+    generate_advx(ds_loader=ds_loader, model=model, 
+                    adv_dir_path=adv_dir_path,
+                    model_name=model_name, device=device, logger=logger,
+                    n_max_advx_samples=2000)
+    adv_ds = MyTensorDataset(ds_path=adv_dir_path)
+    adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
+    correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
+    with open(corrects_path, 'wb') as f:
+        pickle.dump(correct_preds.cpu(), f)
 
 
 def generate_advx_main(root, logger=None):
@@ -360,5 +397,20 @@ def generate_advx_main(root, logger=None):
 
 
 if __name__ == '__main__':
-    root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB'
-    generate_advx_main(root)
+    # root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB'
+    # generate_advx_main(root)
+    
+    # generate_baseline_advx(ds_name='val')
+    
+    for m_id in range(8):
+        path = fm.join("results/advx", MODEL_NAMES[m_id], 'correct_preds_val.gz')
+        
+        try:
+            with open(path, 'rb') as f:
+                correct = pickle.load(f)
+            print(f"M{m_id}: {correct.shape[0]}")
+            print(f"M{m_id}: {correct.cpu().numpy().mean()}")
+        except:
+            pass
+    
+    print("")
