@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 
-from generate_advx import generate_advx
+from generate_advx import generate_advx, generate_baseline_advx
 from manage_files import delete_advx_ts
 
 from torch.utils.tensorboard import SummaryWriter
@@ -267,7 +267,7 @@ def train_pct_pipeline(args):
     if not os.path.isdir(exp_path):
         os.mkdir(exp_path)
 
-    save_params(locals().items(), exp_path, 'info')
+    # save_params(locals().items(), exp_path, 'info')
 
     logger = init_logger(exp_path, fname=f'progress_{args.exp_name}')
 
@@ -310,9 +310,9 @@ def train_pct_pipeline(args):
                                                 old_model=old_model,
                                                 device=device)
 
-                # logger.info(print_perf("\n>>> Starting {ds_name} perf \n",
-                #     base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
-                #     base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
+                logger.info(print_perf(f"\n>>> Starting {ds_name} perf \n",
+                    base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
+                    base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
 
             #############################
             # LOSS TYPE LEVEL
@@ -321,13 +321,14 @@ def train_pct_pipeline(args):
                 logger.info(f"------- LOSS: {loss_name} --------")
                 loss_dir_path = os.path.join(model_pair_path, loss_name)      
                 # NB: non mi serve fare un check per creare la cartella perchè lo faccio un livello dopo            
-
+                adv_at_sel = 'AT' in loss_name
+                loss_name = loss_name.split('-AT')[0]
                 #############################
                 # HYPERPARAMETERS LEVEL
                 #############################
                 
-                alphas = args.alphas_pct if loss_name=='PCT' else args.alphas_mix
-                betas = args.betas_pct if loss_name=='PCT' else args.betas_mix
+                alphas = args.alphas_pct if 'PCT' in loss_name else args.alphas_mix
+                betas = args.betas_pct if 'PCT' in loss_name else args.betas_mix
                 
                 for alpha, beta in zip(alphas, betas):
                     # if loss_name=='PCT':
@@ -336,7 +337,10 @@ def train_pct_pipeline(args):
                     params_dir = f"a-{alpha}_b-{beta}"
                     params_dir_path = os.path.join(loss_dir_path, params_dir)
                     if not os.path.isdir(params_dir_path):
-                        os.makedirs(params_dir_path)                    
+                        os.makedirs(params_dir_path)
+                    else:
+                        logger.info("Already computed. Skipping...")
+                        continue                  
 
                     try:
                         logger.debug('Start training...')
@@ -350,7 +354,7 @@ def train_pct_pipeline(args):
                                             train_loader=train_loader, val_loader=val_loader,
                                             epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
                                             alpha=alpha, beta=beta, trainable_layers=trainable_layers,
-                                            adv_training=args.adv_tr,
+                                            adv_training=adv_at_sel,#args.adv_tr,
                                             logger=logger, exp_dir=params_dir_path)#, writer=writer)
 
                         #####################################
@@ -361,6 +365,36 @@ def train_pct_pipeline(args):
                         model.load_state_dict(checkpoint['model_state_dict'])
                         
                         for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
+                            # if ds_name=='val':
+                            #     continue
+                            
+                            # print("")
+                            # results = {}
+                            # with open(os.path.join(params_dir_path, 'results_last.gz'), 'rb') as f:
+                            #     results['clean'] = pickle.load(f)
+                            # adv_path = "results/day-30-01-2023_hr-10-01-02_ADV_TR/advx_ft"
+                            # adv_path = os.path.join(adv_path, model_pair_dir, 'PCT', params_dir)
+                            # with open(os.path.join(adv_path, 'results_last.gz'), 'rb') as f:
+                            #     results['advx'] = pickle.load(f)
+                            
+                            # with open(os.path.join(params_dir_path, 'results_test.gz'), 'wb') as f:
+                            #     pickle.dump(results, f)
+                            
+                            # with open(os.path.join(params_dir_path, 'results_test.gz'), 'rb') as f:
+                            #     results_test_check = pickle.load(f)
+                                
+                            # with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
+                            #     f.write(f">>> Clean Results\n")
+                            #     f.write(f"Old Acc: {results['clean']['old_acc']}\n")
+                            #     f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
+                            #     f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+                            #     f.write(f">>> Advx Results\n")
+                            #     f.write(f"Old Acc: {results['advx']['old_acc']}\n")
+                            #     f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
+                            #     f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+
+                            # continue
+                            
                             logger.debug(f'Evaluating {ds_name} set ...')
                             results = {}
                             try:  
@@ -393,13 +427,30 @@ def train_pct_pipeline(args):
                                             logger=logger, device=device,
                                             n_max_advx_samples=args.n_adv_ts)
                                 adv_ds = MyTensorDataset(ds_path=adv_dir_path)
-                                adv_ds_loader = DataLoader(adv_ds, batch_size=test_loader.batch_size)
+                                adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
 
-                                # Load WB advx predictions of M0 and M1
-                                with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], 'correct_preds.gz'), 'rb') as f:
-                                    old_correct_adv = pickle.load(f)
-                                with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], 'correct_preds.gz'), 'rb') as f:
-                                    new_correct_adv = pickle.load(f)
+                                try:
+                                    # Load WB advx predictions of M0 and M1
+                                    with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
+                                        old_correct_adv = pickle.load(f)
+                                except:
+                                    logger.debug(f"Baseline {ds_name} advx for M{old_model_id} does not exist. Generating...")
+                                    set_all_seed(args.random_seed)
+                                    generate_baseline_advx(old_model_id, ds_name=ds_name)
+                                    with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
+                                        old_correct_adv = pickle.load(f)
+                                
+                                try:    
+                                    with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
+                                        new_correct_adv = pickle.load(f)
+                                except:
+                                    logger.debug(f"Baseline {ds_name} advx for M{model_id} does not exist. Generating...")
+                                    set_all_seed(args.random_seed)
+                                    generate_baseline_advx(model_id, ds_name=ds_name)
+                                    with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
+                                        new_correct_adv = pickle.load(f)
+                                # todo: dopo aver pigliato i correct veri per test o ts
+                                # uso le predizioni già salvate e le confronto con la baseline (da calcolare a parte con generate_baseline_advx)
                                 
                                 # Get results of model M wrt M0 and M1
                                 set_all_seed(args.random_seed)
@@ -481,19 +532,19 @@ if __name__ == '__main__':
     parser.add_argument('-root', default='results', type=str)
     parser.add_argument('-adv_tr', action='store_true')
 
-    parser.add_argument('-n_tr', default=100, type=int)   
-    parser.add_argument('-n_ts', default=100, type=int) 
+    parser.add_argument('-n_tr', default=50, type=int)   
+    parser.add_argument('-n_ts', default=50, type=int) 
 
     parser.add_argument('-epochs', default=1, type=int)  
     parser.add_argument('-lr', default=1e-3, type=float)
     parser.add_argument('-batch_size', default=50, type=int)   
     
-    parser.add_argument('-n_steps', default=2, type=int)   
+    parser.add_argument('-n_steps', default=50, type=int)   
     parser.add_argument('-n_adv_ts', default=50, type=int) 
     
     parser.add_argument('-old_model_ids', default=[1], type=int, nargs='+')
     parser.add_argument('-model_ids', default=[4], type=int, nargs='+')
-    parser.add_argument('-loss_names', default=['PCT', 'MixMSE'], type=str, nargs='+')
+    parser.add_argument('-loss_names', default=['PCT-AT'], type=str, nargs='+')
     parser.add_argument('-alphas_mix', default=[0.7], type=float, nargs='+')
     parser.add_argument('-betas_mix', default=[0.2], type=float, nargs='+')
     parser.add_argument('-alphas_pct', default=[1], type=int, nargs='+')
@@ -509,6 +560,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     train_pct_pipeline(args)
+
+
+
+
+
+
+
+
+
 
 
     # old_model_ids=[1,2,3,4,5,6]
