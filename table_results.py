@@ -22,6 +22,7 @@ def table_new(model_ids=None, old_model_ids=None, loss_names=None):
     # ds_name = 'val'
 
     for ds_name in ['test', 'val']:
+        print(f"Dataset: {ds_name}")
         rows = []
         
         if (model_ids is not None) and (old_model_ids is not None):
@@ -78,7 +79,7 @@ def table_new(model_ids=None, old_model_ids=None, loss_names=None):
                                         acc, rob_acc, nfr, 
                                         rob_nfr, common_nfr, sum_nfr])
                     except Exception as e:
-                        print(e)
+                        print(f"{model_pair_dir}/{loss_dir}/{hparams_dir}")
                         rows_ft.append([loss_dir, hparams_dir, 
                                         math.nan, math.nan, math.nan, 
                                         math.nan, math.nan, math.nan])
@@ -112,7 +113,7 @@ def table_new(model_ids=None, old_model_ids=None, loss_names=None):
         latex_table(model_results_df_list, dir_out=path, fname=f'model_results_{ds_name}')
     
 
-    print("")
+        print("")
             
         
     
@@ -200,7 +201,7 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
 
 if __name__ == '__main__':
     old_model_ids=[1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
-    model_ids=[4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
+    model_ids=    [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
     loss_names = ['PCT', 'PCT-AT', 'MixMSE-AT']
     
     table_new(old_model_ids=old_model_ids, model_ids=model_ids, loss_names=loss_names)
