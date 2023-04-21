@@ -142,6 +142,25 @@ def get_models_info_list(root, advx_folder, nopes=None):
     return models_info_list, old_models_idx, new_models_idx
 
 
+def check_baseline_advx(mid, ds_name, logger, random_seed):
+    """
+    If baseline advx already exists for model<mid> load it in correct_adv
+    otherwise compute, save and return
+    """
+    correct_adv_fname = os.path.join('results', 'advx', MODEL_NAMES[mid], f"correct_preds_{ds_name}.gz")
+    try:
+        # Load WB advx predictions of Mold
+        with open(correct_adv_fname, 'rb') as f:
+            correct_adv = pickle.load(f)
+    except:
+        logger.debug(f"Baseline {ds_name} advx for M{mid} does not exist. Generating...")
+        set_all_seed(random_seed)
+        generate_baseline_advx(mid, ds_name=ds_name)
+        with open(correct_adv_fname, 'rb') as f:
+            correct_adv = pickle.load(f)
+    return correct_adv
+
+
 def generate_baseline_advx(model_id, ds_name='test'):
     root = 'results/advx'
 

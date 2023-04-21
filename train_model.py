@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 
-from generate_advx import generate_advx, generate_baseline_advx
+from generate_advx import generate_advx, generate_baseline_advx, check_baseline_advx
 from manage_files import delete_advx_ts
 
 from torch.utils.tensorboard import SummaryWriter
@@ -288,68 +288,64 @@ def train_pct_pipeline(args):
     #############################
     # MODEL PAIR LEVEL
     #############################
-    for mid_i, (old_model_id, model_id) in enumerate(zip(args.old_model_ids, args.model_ids)):   
+    for mid_i, (old_model_id, model_id) in enumerate(zip(args.old_model_ids, args.model_ids)):
+          
+        logger.info(f"------- MODELS: {old_model_id} -> {model_id} -------") 
         model_pair_dir = f"old-{old_model_id}_new-{model_id}"
         model_pair_path = os.path.join(exp_path, model_pair_dir)
 
         if not os.path.isdir(model_pair_path):
             os.mkdir(model_pair_path)
 
-        logger.info(f"------- MODELS: {old_model_id} -> {model_id} -------")
-        try:
-            # The architecture of the old model will be the same, I load it here
-            old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf') 
-            
-            model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
-            # Starting test set performances
-            logger.debug('Get baseline results')
-            
-            base_results = {}
-            for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
-                base_results[ds_name] = get_pct_results(new_model=model, ds_loader=ds_loader, 
-                                                old_model=old_model,
-                                                device=device)
+        # The architecture of the old model will be the same, I load it here
+        old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf') 
+        
+        model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+        # Starting test set performances
+        logger.debug('Get baseline results')
+        
+        base_results = {}
+        for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
+            base_results[ds_name] = get_pct_results(new_model=model, ds_loader=ds_loader, 
+                                            old_model=old_model,
+                                            device=device)
 
-                logger.info(print_perf(f"\n>>> Starting {ds_name} perf \n",
-                    base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
-                    base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
+            logger.info(print_perf(f"\n>>> Starting {ds_name} perf \n",
+                base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
+                base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
 
+        #############################
+        # LOSS TYPE LEVEL
+        #############################
+        for loss_name in args.loss_names:
+            logger.info(f"------- LOSS: {loss_name} --------")
+            loss_dir_path = os.path.join(model_pair_path, loss_name)      
+            # NB: non mi serve fare un check per creare la cartella perchè lo faccio un livello dopo            
+            adv_at_sel = 'AT' in loss_name
+            loss_name = loss_name.split('-AT')[0]
             #############################
-            # LOSS TYPE LEVEL
+            # HYPERPARAMETERS LEVEL
             #############################
-            for i, loss_name in enumerate(args.loss_names):
-                logger.info(f"------- LOSS: {loss_name} --------")
-                loss_dir_path = os.path.join(model_pair_path, loss_name)      
-                # NB: non mi serve fare un check per creare la cartella perchè lo faccio un livello dopo            
-                adv_at_sel = 'AT' in loss_name
-                loss_name = loss_name.split('-AT')[0]
-                #############################
-                # HYPERPARAMETERS LEVEL
-                #############################
-                
-                alphas = args.alphas_pct if 'PCT' in loss_name else args.alphas_mix
-                betas = args.betas_pct if 'PCT' in loss_name else args.betas_mix
-                
-                for alpha, beta in zip(alphas, betas):
+            
+            alphas = args.alphas_pct if 'PCT' in loss_name else args.alphas_mix
+            betas = args.betas_pct if 'PCT' in loss_name else args.betas_mix
+            
+            for alpha, beta in zip(alphas, betas):
+                try:
                     # if loss_name=='PCT':
                     #     alpha, beta = int(alpha), int(beta)
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
                     params_dir = f"a-{alpha}_b-{beta}"
-                    params_dir_path = os.path.join(loss_dir_path, params_dir)
-                    if not os.path.isdir(params_dir_path):
-                        os.makedirs(params_dir_path)
-                    else:
-                        logger.info("Already computed. Skipping...")
-                        continue                  
+                    params_dir_path = os.path.join(loss_dir_path, params_dir)                 
 
                     try:
-                        logger.debug('Start training...')
                         #####################################
                         # TRAIN POSITIVE CONGRUENT
                         #####################################
                         model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
                         
                         if not args.test_only:
+                            logger.debug('Start training...')
                             train_pct_model(model=model, old_model=old_model,
                                             train_loader=train_loader, val_loader=val_loader,
                                             epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
@@ -357,63 +353,68 @@ def train_pct_pipeline(args):
                                             adv_training=adv_at_sel,#args.adv_tr,
                                             logger=logger, exp_dir=params_dir_path)#, writer=writer)
 
-                        #####################################
-                        # SAVE CLEAN RESULTS
-                        #####################################
-                        model_fname = os.path.join(params_dir_path, 'checkpoints', "last.pt")
-                        checkpoint = torch.load(model_fname)
-                        model.load_state_dict(checkpoint['model_state_dict'])
+                    except Exception as e:
+                        logger.debug('Training failed.')
+                        logger.debug(e)
+                    
+                    
+                    # If trained model has not been saved skip and try next configuration
+                    # Otherwise start the evaluation
+                    model_fname = os.path.join(params_dir_path, 'checkpoints', "last.pt")
+                    if not os.path.exists(model_fname):
+                        logger.debug(f"Pretrained model does not exist: {model_fname}")
+                        continue
+
+                    checkpoint = torch.load(model_fname, map_location=device)
+                    model.load_state_dict(checkpoint['model_state_dict'])
+                    
+                    for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):                          
+                        results_fname = os.path.join(params_dir_path, f"results_{ds_name}.gz")
+                        clean_results_fname = os.path.join(params_dir_path, f"results_clean_{ds_name}.gz")
+                        adv_results_fname = os.path.join(params_dir_path, f"results_advx_{ds_name}.gz")
                         
-                        for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
-                            # if ds_name=='val':
-                            #     continue
-                            
-                            # print("")
-                            # results = {}
-                            # with open(os.path.join(params_dir_path, 'results_last.gz'), 'rb') as f:
-                            #     results['clean'] = pickle.load(f)
-                            # adv_path = "results/day-30-01-2023_hr-10-01-02_ADV_TR/advx_ft"
-                            # adv_path = os.path.join(adv_path, model_pair_dir, 'PCT', params_dir)
-                            # with open(os.path.join(adv_path, 'results_last.gz'), 'rb') as f:
-                            #     results['advx'] = pickle.load(f)
-                            
-                            # with open(os.path.join(params_dir_path, 'results_test.gz'), 'wb') as f:
-                            #     pickle.dump(results, f)
-                            
-                            # with open(os.path.join(params_dir_path, 'results_test.gz'), 'rb') as f:
-                            #     results_test_check = pickle.load(f)
+                        def check(res_fname):
+                            res = None
+                            res_check, cln_check, adv_check = False, False, False
+                            if os.path.exists(res_fname):
+                                with open(res_fname, 'rb') as f:
+                                    res = pickle.load(f)
+                                res_check = True
+                                cln_check = True if 'clean' in res.keys() else False
+                                adv_check = True if 'advx' in res.keys() else False
+                            return res, res_check, cln_check, adv_check
+                        
+                        loaded_results, results_check, clean_check, advx_check = check(results_fname)
+
                                 
-                            # with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
-                            #     f.write(f">>> Clean Results\n")
-                            #     f.write(f"Old Acc: {results['clean']['old_acc']}\n")
-                            #     f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
-                            #     f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
-                            #     f.write(f">>> Advx Results\n")
-                            #     f.write(f"Old Acc: {results['advx']['old_acc']}\n")
-                            #     f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
-                            #     f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
-
-                            # continue
-                            
+                        if not clean_check:
+                            #####################################
+                            # SAVE CLEAN RESULTS
+                            #####################################
                             logger.debug(f'Evaluating {ds_name} set ...')
-                            results = {}
-                            try:  
-                                set_all_seed(args.random_seed)
-                                clean_results = get_pct_results(new_model=model, ds_loader=ds_loader, 
-                                                            old_correct=base_results[ds_name]['old_correct'],
-                                                            device=device)
-                                clean_results['loss'] = checkpoint['loss'].loss_path
-                                clean_results['orig_acc'] = base_results[ds_name]['new_acc']
-                                clean_results['orig_nfr'] = base_results[ds_name]['nfr']
-                                clean_results['orig_pfr'] = base_results[ds_name]['pfr']
-
-                                results['clean'] = clean_results
-                                with open(os.path.join(params_dir_path, f"results_{ds_name}.gz"), 'wb') as f:
-                                    pickle.dump(results, f)
-                            except Exception as e:
-                                logger.debug(f"Evaluation failed.")
-                                        
                             
+                            set_all_seed(args.random_seed)
+                            clean_results = get_pct_results(new_model=model, ds_loader=ds_loader, 
+                                                        old_correct=base_results[ds_name]['old_correct'],
+                                                        device=device)
+                            clean_results['loss'] = checkpoint['loss'].loss_path
+                            clean_results['orig_acc'] = base_results[ds_name]['new_acc']
+                            clean_results['orig_nfr'] = base_results[ds_name]['nfr']
+                            clean_results['orig_pfr'] = base_results[ds_name]['pfr']
+                            with open(clean_results_fname, 'wb') as f:
+                                pickle.dump(clean_results, f)
+                                
+                            clean_check = True
+                        else:
+                            logger.debug(f"Clean results already computed for {ds_name}")
+                            if not os.path.exists(clean_results_fname):
+                                with open(clean_results_fname, 'wb') as f:
+                                    pickle.dump(loaded_results['clean'], f)                                
+                            with open(clean_results_fname, 'rb') as f:
+                                clean_results = pickle.load(f)
+                        
+                        
+                        if not advx_check:
                             #####################################
                             # SAVE ADVX RESULTS
                             #####################################
@@ -421,34 +422,16 @@ def train_pct_pipeline(args):
                                 logger.debug(f'Generating advx on {ds_name} set ...')
                                 adv_dir_path = os.path.join(params_dir_path, 'advx', 'ts')
 
-                                set_all_seed(0)
+                                set_all_seed(args.random_seed)
                                 generate_advx(model=model, ds_loader=ds_loader, n_steps=args.n_steps, 
                                             adv_dir_path=adv_dir_path,
                                             logger=logger, device=device,
-                                            n_max_advx_samples=args.n_adv_ts)
+                                            n_max_advx_samples=args.n_adv_ts)                            
                                 adv_ds = MyTensorDataset(ds_path=adv_dir_path)
                                 adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
 
-                                try:
-                                    # Load WB advx predictions of M0 and M1
-                                    with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
-                                        old_correct_adv = pickle.load(f)
-                                except:
-                                    logger.debug(f"Baseline {ds_name} advx for M{old_model_id} does not exist. Generating...")
-                                    set_all_seed(args.random_seed)
-                                    generate_baseline_advx(old_model_id, ds_name=ds_name)
-                                    with open(os.path.join('results', 'advx', MODEL_NAMES[old_model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
-                                        old_correct_adv = pickle.load(f)
-                                
-                                try:    
-                                    with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
-                                        new_correct_adv = pickle.load(f)
-                                except:
-                                    logger.debug(f"Baseline {ds_name} advx for M{model_id} does not exist. Generating...")
-                                    set_all_seed(args.random_seed)
-                                    generate_baseline_advx(model_id, ds_name=ds_name)
-                                    with open(os.path.join('results', 'advx', MODEL_NAMES[model_id], f"correct_preds_{ds_name}.gz"), 'rb') as f:
-                                        new_correct_adv = pickle.load(f)
+                                old_correct_adv = check_baseline_advx(old_model_id, ds_name, logger, args.random_seed)
+                                new_correct_adv = check_baseline_advx(model_id, ds_name, logger, args.random_seed)
                                 # todo: dopo aver pigliato i correct veri per test o ts
                                 # uso le predizioni già salvate e le confronto con la baseline (da calcolare a parte con generate_baseline_advx)
                                 
@@ -461,63 +444,79 @@ def train_pct_pipeline(args):
                                 adv_results['orig_acc'] = new_correct_adv.cpu().numpy().mean()
                                 adv_results['orig_nfr'] = compute_nflips(old_correct_adv, new_correct_adv)
                                 adv_results['orig_pfr'] = compute_pflips(old_correct_adv, new_correct_adv)
-
-                                results['advx'] = adv_results
-                                with open(os.path.join(params_dir_path, f"results_{ds_name}.gz"), 'wb') as f:
-                                    pickle.dump(results, f)
-
-                                delete_advx_ts(params_dir_path)
-                        
-                                logger.info(f">>> Clean Results")
-                                logger.info(f"Old Acc: {results['clean']['old_acc']}")
-                                logger.info(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}")
-                                logger.info(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}")
-                                logger.info(f">>> Advx Results")
-                                logger.info(f"Old Acc: {results['advx']['old_acc']}")
-                                logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
-                                logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
-                            
-
-                                if ds_name=='test':
-                                    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-                                    plot_loss(results['clean']['loss'], ax)
-                                    fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
-                                    
-                                with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
-                                    f.write(f">>> Clean Results\n")
-                                    f.write(f"Old Acc: {results['clean']['old_acc']}\n")
-                                    f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
-                                    f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
-                                    f.write(f">>> Advx Results\n")
-                                    f.write(f"Old Acc: {results['advx']['old_acc']}\n")
-                                    f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
-                                    f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+                                
+                                with open(adv_results_fname, 'wb') as f:
+                                    pickle.dump(adv_results, f)
+                                
+                                # delete_advx_ts(params_dir_path)
+                                advx_check = True
 
                             except Exception as e:
-                                print(e)
-                    except Exception as e:
-                        logger.debug('Training failed.')
-                        logger.debug(e)
+                                logger.debug(f"Advx generation on {ds_name} gone wrong. {e}")
+                        else:
+                            logger.debug(f"Advx results already computed for {ds_name}")                         
+                            if not os.path.exists(adv_results_fname):
+                                with open(adv_results_fname, 'wb') as f:
+                                    pickle.dump(loaded_results['advx'], f)    
+                            with open(adv_results_fname, 'rb') as f:
+                                adv_results = pickle.load(f)
+                        
+                        
+                        if clean_check and advx_check:
+                            results = {}
+                            results['clean'] = clean_results
+                            results['advx'] = adv_results
+                            with open(os.path.join(params_dir_path, f"results_{ds_name}.gz"), 'wb') as f:
+                                pickle.dump(results, f)
+                        
+                            if ds_name=='test':
+                                fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+                                plot_loss(results['clean']['loss'], ax)
+                                fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
+                            
+                            logger.info(f">>> Clean Results")
+                            logger.info(f"Old Acc: {results['clean']['old_acc']}")
+                            logger.info(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}")
+                            logger.info(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}")
+                            logger.info(f">>> Advx Results")
+                            logger.info(f"Old Acc: {results['advx']['old_acc']}")
+                            logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
+                            logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
+                        
+                            with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
+                                f.write(f">>> Clean Results\n")
+                                f.write(f"Old Acc: {results['clean']['old_acc']}\n")
+                                f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
+                                f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+                                f.write(f">>> Advx Results\n")
+                                f.write(f"Old Acc: {results['advx']['old_acc']}\n")
+                                f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
+                                f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+                        else:
+                            logger.debug(f"Clean check: {clean_check}, Advx check: {advx_check}, Results cannot be saved jointly.")
+                except Exception as e:
+                    logger.debug("Something went wrong ...")
+                    logger.debug(e)
                     
-                #     with open(os.path.join(params_dir_path, f"results_test.gz"), 'rb') as f:
-                #         results = pickle.load(f)
 
-                #     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-                #     plot_loss(results['clean']['loss'], ax)
-                #     fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
-                #     with open(os.path.join(params_dir_path, f"test_perf.txt"), 'w') as f:
-                #         f.write(f">>> Clean Results\n")
-                #         f.write(f"Old Acc: {results['clean']['old_acc']}\n")
-                #         f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
-                #         f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
-                #         f.write(f">>> Advx Results\n")
-                #         f.write(f"Old Acc: {results['advx']['old_acc']}\n")
-                #         f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
-                #         f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
-                # # show_hps_behaviour(root=loss_dir_path, fig_path=os.path.join('images', 'MixMSE.png'))
-        except Exception as e:
-            logger.debug(f"{model_pair_path} not computed.")
-            logger.debug(e)
+                
+            #     with open(os.path.join(params_dir_path, f"results_test.gz"), 'rb') as f:
+            #         results = pickle.load(f)
+
+            #     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+            #     plot_loss(results['clean']['loss'], ax)
+            #     fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
+            #     with open(os.path.join(params_dir_path, f"test_perf.txt"), 'w') as f:
+            #         f.write(f">>> Clean Results\n")
+            #         f.write(f"Old Acc: {results['clean']['old_acc']}\n")
+            #         f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
+            #         f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+            #         f.write(f">>> Advx Results\n")
+            #         f.write(f"Old Acc: {results['advx']['old_acc']}\n")
+            #         f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
+            #         f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+            # # show_hps_behaviour(root=loss_dir_path, fig_path=os.path.join('images', 'MixMSE.png'))
+
 
     logger.info("Pipeline completed :)")
     
@@ -542,13 +541,13 @@ if __name__ == '__main__':
     parser.add_argument('-n_steps', default=50, type=int)   
     parser.add_argument('-n_adv_ts', default=50, type=int) 
     
-    parser.add_argument('-old_model_ids', default=[1], type=int, nargs='+')
-    parser.add_argument('-model_ids', default=[4], type=int, nargs='+')
-    parser.add_argument('-loss_names', default=['PCT-AT'], type=str, nargs='+')
-    parser.add_argument('-alphas_mix', default=[0.7], type=float, nargs='+')
-    parser.add_argument('-betas_mix', default=[0.2], type=float, nargs='+')
-    parser.add_argument('-alphas_pct', default=[1], type=int, nargs='+')
-    parser.add_argument('-betas_pct', default=[5], type=int, nargs='+')
+    parser.add_argument('-old_model_ids', default=[2], type=int, nargs='+')
+    parser.add_argument('-model_ids', default=[5], type=int, nargs='+')
+    parser.add_argument('-loss_names', default=['PCT-AT', 'MixMSE-AT'], type=str, nargs='+')
+    parser.add_argument('-alphas_mix', default=[0.3, 0.5], type=float, nargs='+')
+    parser.add_argument('-betas_mix', default=[0.6, 0.4], type=float, nargs='+')
+    parser.add_argument('-alphas_pct', default=[1, 1], type=int, nargs='+')
+    parser.add_argument('-betas_pct', default=[1, 5], type=int, nargs='+')
     
     parser.add_argument('-date', action='store_true')
     parser.add_argument('-test_only', action='store_true')
