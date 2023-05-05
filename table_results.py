@@ -14,14 +14,28 @@ dict_loss_names = {'PCT-AT': '\pctat',
                    'MixMSE': '\mixmse',}
 
 pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
 
 
-def table_new(model_ids=None, old_model_ids=None, loss_names=None):
-    path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
-    
+def hparams_selector(df, criteria, model_ids, select_hparams, ascending=True):
+    assert criteria in ['Acc', 'RobAcc', 'NFR', 'R-NFR', 'B-NFR', 'S-NFR']
+    df = df.sort_values(by=criteria, ascending=ascending).drop_duplicates(['Loss']).sort_index()
+    select_hparams[model_ids] = df[['Loss', 'Hparams']]
+    return df
+
+
+def table_new(path, model_ids=None, old_model_ids=None, loss_names=None, 
+              select='with_val', criteria='S-NFR', ascending=True):
+    """
+    select:
+    - 'best': best hparams for valid and test set
+    - 'with_val': best hparams for val and same hparams for test
+    """
     # ds_name = 'val'
 
-    for ds_name in ['test', 'val']:
+    select_hparams = {}
+    
+    for ds_name in ['val', 'test']:
         print(f"Dataset: {ds_name}")
         rows = []
         
@@ -91,7 +105,29 @@ def table_new(model_ids=None, old_model_ids=None, loss_names=None):
                             ['new', math.nan, acc1, rob_acc1, nfr1, rob_nfr1, math.nan, sum_nfr1]]
             model_base_results_df = pd.DataFrame(data=rows_old_new, columns=columns[1:])
             model_ft_results_df = pd.DataFrame(data=rows_ft, columns=columns[1:])
-            model_ft_results_df = model_ft_results_df.sort_values(by='S-NFR', ascending=True).drop_duplicates(['Loss']).sort_index()
+
+            if ds_name == 'val':
+                model_ft_results_df = hparams_selector(df=model_ft_results_df, criteria=criteria, 
+                                                       model_ids=model_pair_dir, select_hparams=select_hparams,
+                                                       ascending=ascending)
+                # model_ft_results_df = model_ft_results_df.sort_values(by=criteria, ascending=True).drop_duplicates(['Loss']).sort_index()
+            else: #if test
+                if select=='with_val':
+                    # select_hparams[model_pair_dir].merge(right=model_ft_results_df, on=['Loss', 'Hparams'], how='left')
+                    # model_ft_results_df['Select'] = select_hparams[model_pair_dir]
+                    # model_ft_results_df = model_ft_results_df.sort_values(by='Select', ascending=True).drop_duplicates(['Loss']).sort_index()
+                    # model_ft_results_df.drop(columns=['Select'], inplace=True)
+                    model_ft_results_df = select_hparams[model_pair_dir].merge(right=model_ft_results_df, 
+                                                                                on=['Loss', 'Hparams'], 
+                                                                                how='left')
+                else:
+                    # model_ft_results_df['Select'] = model_ft_results_df[criteria]
+                    # model_ft_results_df = model_ft_results_df.sort_values(by='Select', ascending=True).drop_duplicates(['Loss']).sort_index()
+                    # model_ft_results_df.drop(columns=['Select'], inplace=True)
+                    model_ft_results_df = hparams_selector(df=model_ft_results_df, criteria=criteria, 
+                                                       model_ids=model_pair_dir, select_hparams=select_hparams)
+
+                    
             model_results_df = pd.concat([model_base_results_df, model_ft_results_df])
             # model_results_df.reset_index(inplace=True, drop=True)
             model_results_df.set_index('Loss', inplace=True) 
@@ -109,11 +145,34 @@ def table_new(model_ids=None, old_model_ids=None, loss_names=None):
             
         model_results_df_list = pd.concat(model_results_df_list,
                                         keys=keys)
-        # model_results_df_list.to_csv('results/all_results_table.csv')
-        latex_table(model_results_df_list, dir_out=path, fname=f'model_results_{ds_name}')
+        
+        
+        fname = f'model_results_{ds_name}'
+        fname = f"{fname}_{'best' if ds_name == 'val' else select}"
+        fname = f"{fname}_criteria-{criteria}"
+        
+        latex_table(model_results_df_list, dir_out=path, fname=fname)
+        model_results_df_list.to_csv(f"results/{fname}.csv")
+        
     
 
-        print("")
+        print(os.path.join(path, fname))
+    
+    # print(model_results_df_list)
+    print(model_results_df_list.mean(level=1))
+    print(model_results_df_list.std(level=1))
+    
+    n_pairs = len(model_results_df_list.sum(level=0))
+    sums_df = model_results_df_list.sum(level=1).iloc[1:, :]
+    sums_df.iloc[1:, :] = sums_df.iloc[1:, :] - sums_df.iloc[0, :]
+    sums_df /= n_pairs
+    
+    print(sums_df)
+    
+    
+    
+    
+    print("")
             
         
     
@@ -173,7 +232,6 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
         # new_index_name = r"\hline \multirow{6}{*}{" + dict_loss_names[new_index_name] + "}"
         # new_index_name = model_pair
         df = df.rename(index={model_pair: new_index_name})
-        print("")
 
     # df.rename(index={k:v in })
     # df = df.transpose()
@@ -202,9 +260,17 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
 if __name__ == '__main__':
     old_model_ids=[1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
     model_ids=    [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
+    # old_model_ids=[2, 4,]
+    # model_ids=    [4, 7]
     loss_names = ['PCT', 'PCT-AT', 'MixMSE-AT']
+    path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    criteria = 'S-NFR'
+    ascending = False
+    # criteria = 'acc-rob-protocol'
     
-    table_new(old_model_ids=old_model_ids, model_ids=model_ids, loss_names=loss_names)
+    
+    table_new(path=path, old_model_ids=old_model_ids, model_ids=model_ids, 
+            loss_names=loss_names, criteria=criteria, ascending=ascending)
     
     # path="results/day-25-01-2023_hr-15-38-00_CLEAN_TR_backup"
     
