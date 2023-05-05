@@ -226,6 +226,11 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
 
 
 def freeze_network(model, n_layer=1):
+    """
+    model: torch network
+    n_layer: how many layers you DON'T want to freeze 
+    starting from the last one up to the first
+    """
     max_id = len(list(model.children())) - n_layer
 
     for i, child in enumerate(model.children()):
