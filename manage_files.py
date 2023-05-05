@@ -77,6 +77,8 @@ def delete_advx_ts(root):
     for root_i, dirs, files in os.walk(root):
         if 'ts' in dirs:
             paths.append(os.path.join(root_i, 'ts'))
+        if 'val' in dirs:
+            paths.append(os.path.join(root_i, 'val'))
 
     for i, path in enumerate(paths):
         print(f"{i}/{len(paths)}")
@@ -89,15 +91,15 @@ def delete_advx_ts(root):
 
 
 if __name__ == '__main__':
-    # # root = 'results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR'
+    root = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
     # root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB/advx_ft'
     # # delete_non_last_checkpoints(root)
-    # delete_advx_ts(root)
+    delete_advx_ts(root)
     
-    old_model_ids = [5,5,6]
-    model_ids = [4,7,7]
+    # old_model_ids = [5,5,6]
+    # model_ids = [4,7,7]
     
-    # old_model_ids = [1]
-    # model_ids = [4]
+    # # old_model_ids = [1]
+    # # model_ids = [4]
     
-    refactor_results(old_model_ids, model_ids)
+    # refactor_results(old_model_ids, model_ids)
