@@ -5,9 +5,13 @@ import os
 from copy import deepcopy as dcopy
 from utils.utils import join
 import math
-from utils.visualization import create_legend
+from utils.visualization import create_legend, fill_quadrants, \
+    set_grid, plot_axis_lines, remove_ticklabels
+
 
 import matplotlib as mpl
+from matplotlib.patches import Rectangle
+from matplotlib.ticker import FormatStrFormatter
 
 
 # mpl.rcParams['mathtext.fontset'] = 'stix'
@@ -87,14 +91,12 @@ def scatter_ft_results(ax, res_list,
                 continue
             res_x -= res_new_x
             res_y -= res_new_y
-            ax.hlines(y=0, xmin=-100, xmax=100,
-                      linestyle='dashed', color='grey', alpha=0.7)
-            ax.vlines(x=0, ymin=-100, ymax=100,
-                      linestyle='dashed', color='grey', alpha=0.7)
+            plot_axis_lines(ax)
 
         ax.scatter(res_x, res_y,
-                   alpha=0.7, marker=MARKERS[loss_id], s=40,
-                   color=COLORS[loss_id], label=LOSS_NAMES[loss_id])
+                   alpha=0.9, marker=MARKERS[loss_id], s=40,
+                   # color=COLORS[loss_id],
+                   label=LOSS_NAMES[loss_id])
 
         # Rescale the plot for improved visualization
         margin_perc = 0.05
@@ -104,10 +106,15 @@ def scatter_ft_results(ax, res_list,
         xmax = max(xmax, xmax_i)
         ymin = min(ymin, ymin_i)
         ymax = max(ymax, ymax_i)
-        x_margin = math.ceil((xmax - xmin)*margin_perc)
-        y_margin = math.ceil((ymax - ymin)*margin_perc)
-        ax.set_xlim(xmin - x_margin, xmax + x_margin)
-        ax.set_ylim(ymin - y_margin, ymax + y_margin)
+
+    x_margin = math.ceil((xmax - xmin)*margin_perc)
+    y_margin = math.ceil((ymax - ymin)*margin_perc)
+    xmin -= x_margin
+    xmax += x_margin
+    ymin -= y_margin
+    ymax += y_margin
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
 
 
 def scatter_models(path, csv_fname,
@@ -214,9 +221,10 @@ def scatter_all(path, csv_fname,
                 mx2='robacc', my2='rnfr',
                 loss_ids=(0, 1, 2, 3),
                 fig_fname='clusters',
-                diff=False):
+                diff=False,
+                color_quadrants=False):
 
-    nrows, ncols = 1, 2
+    nrows, ncols = 1, 3
 
     df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
 
@@ -248,17 +256,32 @@ def scatter_all(path, csv_fname,
         axs[0, col_j].set_xlabel(xlabel)
         axs[0, col_j].set_ylabel(ylabel)
 
-    axs[0, 1].set_xlim(xmax=10)
-    axs[0, 1].set_ylim(ymin=-80)
 
+    # # Inplot interno
+    # axs[0, 1].set_xlim(xmax=10)
+    # axs[0, 1].set_ylim(ymin=-80)
+    #
+    # xstart, ystart = .1, .01    # inset axes....
+    # xend, yend = .85, .55
 
-    # inset axes....
-    xstart, ystart = .1, .01
-    xend, yend = .85, .55
+    # Inplot esterno
+    # axs[0, 1].set_xlim(xmax=10)
+    # axs[0, 1].set_ylim(ymin=-80)
+
+    xstart, ystart = .02, .02  # inset axes....
+
+    xend, yend = 0.6, 0.55
     xdim = xend - xstart
     ydim = yend - ystart
-    axins = axs[0, 1].inset_axes([xstart, ystart,
-                                  xdim, ydim])
+
+    # xdim, ydim = 0.5, 0.5
+
+
+    # axins = axs[0, 1].inset_axes([xstart, ystart,
+    #                               xdim, ydim])
+
+    axins = axs[0, 2]
+
     scatter_ft_results(axins, res_list,
                        x_metric, y_metric,
                        loss_ids, lines, diff)
@@ -268,21 +291,41 @@ def scatter_all(path, csv_fname,
     axins.set_ylim(y1, y2)
     # axins.xaxis.set_ticks_position('top')
     # axins.yaxis.set_ticks_position('right')
-    axins.tick_params(labelbottom=False, labeltop=True,
-                      labelleft=False, labelright=True)
 
-    axs[0, 0].tick_params(labelbottom=False, labeltop=True)
-    axs[0, 1].tick_params(labelbottom=False, labeltop=True)
+    # axins.tick_params(labelbottom=False, labeltop=False,
+    #                   labelleft=False, labelright=False)
+    # axs[0, 0].tick_params(labelbottom=False, labeltop=True)
+    # axs[0, 1].tick_params(labelbottom=False, labeltop=True)
 
     axs[0, 1].indicate_inset_zoom(axins, edgecolor="black")
+
+    if color_quadrants:
+        # for ax in [axs[0, 0], axs[0, 1], axins]:
+            # xmin, xmax = ax.get_xlim()
+            # ymin, ymax = ax.get_ylim()
+            # major_ticks = np.arange(math.floor(xmin) - 1, math.ceil(xmax) + 1, 10)
+            # minor_ticks = np.arange(math.floor(ymin) - 1, math.ceil(ymax) + 1, 2)
+
+        fill_quadrants(axs[0, 0])
+        fill_quadrants(axs[0, 1])
+        fill_quadrants(axins)
+
+    set_grid(axs[0, 0], major_delta=1, linestyle_maj='dotted')
+    set_grid(axs[0, 1], major_delta=10, minor_delta=1)
+    set_grid(axins, major_delta=1, linestyle_maj='dotted')
+
     fig.tight_layout()
     fig.show()
 
-    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.pdf")
-
-    legend_fig = create_legend(ax=axs[0, 0])
+    legend_fig = create_legend(ax=axs[0, 0], figsize=(11, 0.5))
+    legend_fig.tight_layout()
     legend_fig.show()
+
+    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.pdf")
     legend_fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_legend.pdf")
+
+    # fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.png", dpi=300)
+    # legend_fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_legend.png", dpi=300)
 
 
 if __name__ == '__main__':
@@ -291,12 +334,17 @@ if __name__ == '__main__':
     lines = False
     diff = True
     loss_ids = (0, 1, 2, 3)
+    color_quadrants = True
+
+    fig_fname = 'inplot_interno_semicolored_q'
 
     scatter_all(path=PATH, csv_fname=CSV_FNAME, lines=lines,
                 loss_ids=loss_ids,
                 mx1='acc', my1='anfr',
                 mx2='robacc', my2='rnfr',
-                diff=diff)
+                diff=diff,
+                fig_fname=fig_fname,
+                color_quadrants=color_quadrants)
 
     # scatter_methods(path=PATH, csv_fname=CSV_FNAME, lines=lines,
     #             mx1='acc', my1='anfr',
