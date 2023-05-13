@@ -1,0 +1,310 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import os
+from copy import deepcopy as dcopy
+from utils.utils import join
+import math
+from utils.visualization import create_legend
+
+import matplotlib as mpl
+
+
+# mpl.rcParams['mathtext.fontset'] = 'stix'
+# mpl.rcParams['font.size'] = 20
+# mpl.rcParams['font.family'] = 'STIXGeneral'
+# mpl.rcParams['pdf.fonttype'] = 42
+# mpl.rcParams['ps.fonttype'] = 42
+# mpl.rcParams['mathtext.fontset'] = 'stix'
+# # mpl.rcParams['text.usetex'] = True
+
+mpl.rcParams.update(mpl.rcParamsDefault)
+import scienceplots
+plt.style.use('science')
+# plt.style.use(['science','ieee'])
+
+mpl.rcParams['font.size'] = 15
+
+metric_to_id_dict = {'acc': 0, 'robacc': 1,
+                     'anfr': 2, 'rnfr': 3,
+                     'bnfr': 4, 'snfr': 5}
+
+METRIC_TITLES = ['Clean Accuracy', 'Robust Accuracy',
+                 'ANFR', 'RNFR',
+                 'BNFR', 'SNFR']
+
+# METRIC_TITLES = ['C', 'R',
+#                  'ANFR', 'RNFR',
+#                  'BNFR', 'SNFR']
+METRIC_TITLES = [metric_title + ' (\%)' for metric_title in METRIC_TITLES]
+
+LOSS_NAMES = ['baseline', 'PCT', 'PCT-AT', 'RF-AT (Ours)']
+COLORS = ['grey', 'red', 'blue', 'green']
+MARKERS = ['o', 'v', '^', 'D']
+
+def scatter_ft_results(ax, res_list,
+                       x_metric,
+                       y_metric,
+                       loss_ids,
+                       lines=False,
+                       diff=False):
+    """
+    :param ax:
+    :param res_list: list containing ndarrays. Each matrix has 6 columns,
+    one for each metric in METRIC_TITLES
+    :param x_metric: xaxis metric taken from the keys of the dict "metric_to_id_dict"
+    :param y_metric: yaxis metric taken from the keys of the dict "metric_to_id_dict"
+    :param loss_ids: id referring to the positions in "LOSS_NAMES"
+    :param lines: set True to draw connecting lines between baseline and derived finetuned versions
+    :return:
+
+    Serve solo per fare un singolo plot scatter in un singolo axis
+    """
+    xmin, xmax = math.inf, 0
+    ymin, ymax = math.inf, 0
+
+    res_new = res_list[0]
+    for loss_id in loss_ids:
+        if lines:
+            if 0 in loss_ids:  # if baseline is present
+                if loss_id > 0:
+                    for k in range(res_new.shape[0]):
+                        ax.plot(
+                            [res_new[k, metric_to_id_dict[x_metric]], res_list[loss_id][k, metric_to_id_dict[x_metric]]],
+                            [res_new[k, metric_to_id_dict[y_metric]], res_list[loss_id][k, metric_to_id_dict[y_metric]]],
+                            linestyle='dashed', linewidth=0.3,
+                            alpha=0.7,
+                            color=COLORS[loss_id])
+
+        res_x = dcopy(res_list[loss_id][:, metric_to_id_dict[x_metric]])
+        res_y = dcopy(res_list[loss_id][:, metric_to_id_dict[y_metric]])
+
+        res_new_x = dcopy(res_new[:, metric_to_id_dict[x_metric]])
+        res_new_y = dcopy(res_new[:, metric_to_id_dict[y_metric]])
+
+        if diff:
+            if loss_id == 0:
+                continue
+            res_x -= res_new_x
+            res_y -= res_new_y
+            ax.hlines(y=0, xmin=-100, xmax=100,
+                      linestyle='dashed', color='grey', alpha=0.7)
+            ax.vlines(x=0, ymin=-100, ymax=100,
+                      linestyle='dashed', color='grey', alpha=0.7)
+
+        ax.scatter(res_x, res_y,
+                   alpha=0.7, marker=MARKERS[loss_id], s=40,
+                   color=COLORS[loss_id], label=LOSS_NAMES[loss_id])
+
+        # Rescale the plot for improved visualization
+        margin_perc = 0.05
+        xmin_i, xmax_i = res_x.min(), res_x.max()
+        ymin_i, ymax_i = res_y.min(), res_y.max()
+        xmin = min(xmin, xmin_i)
+        xmax = max(xmax, xmax_i)
+        ymin = min(ymin, ymin_i)
+        ymax = max(ymax, ymax_i)
+        x_margin = math.ceil((xmax - xmin)*margin_perc)
+        y_margin = math.ceil((ymax - ymin)*margin_perc)
+        ax.set_xlim(xmin - x_margin, xmax + x_margin)
+        ax.set_ylim(ymin - y_margin, ymax + y_margin)
+
+
+def scatter_models(path, csv_fname,
+                   loss_ids=(0, 1, 2, 3),
+                   mx1='acc', my1='anfr',
+                   mx2='robacc', my2='rnfr',
+                   lines=True,
+                   fig_fname='clusters'):
+    # todo: DA FINIRE E DEBUGGARE
+    df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
+
+    model_pairs = df['Models'].unique()
+    old_models = np.array([int(mp.split('old-')[-1].split('_new-')[0]) for mp in model_pairs])
+    new_models = np.array([int(mp.split('old-')[-1].split('_new-')[-1]) for mp in model_pairs])
+
+    unique_old_models = np.unique(old_models)
+
+    nrows, ncols = 1, len(unique_old_models)
+
+    old_id = None
+    new_id = None
+
+    res_new = df.loc[df['Loss'] == 'new'].iloc[:, 2:].to_numpy()
+    res_pct = df.loc[df['Loss'] == 'PCT'].iloc[:, 2:].to_numpy()
+    res_pctat = df.loc[df['Loss'] == 'PCT-AT'].iloc[:, 2:].to_numpy()
+    res_rfat = df.loc[df['Loss'] == 'MixMSE-AT'].iloc[:, 2:].to_numpy()
+
+    res_list = [res_new, res_pct, res_pctat, res_rfat]
+
+    fig, axs = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 5 * nrows))
+
+    if old_id is not None:
+        assert isinstance(old_id, int)
+        df = df.loc[df['Models'].str.contains(f"old-{old_id}")]  # Select old reference
+
+    if new_id is not None:
+        assert isinstance(new_id, int)
+        df = df.loc[df['Models'].str.contains(f"new-{new_id}")]  # Select old reference
+
+    for col_j, (x_metric, y_metric) in enumerate([(mx1, my1), (mx2, my2)]):
+        scatter_ft_results(axs[0, col_j], res_list,
+                           x_metric, y_metric, loss_ids, lines)
+
+        axs[0, col_j].set_xlabel(METRIC_TITLES[metric_to_id_dict[x_metric]])
+        axs[0, col_j].set_ylabel(METRIC_TITLES[metric_to_id_dict[y_metric]])
+
+    fig.tight_layout()
+    fig.show()
+
+    fig.savefig(f"images/cluster_results/{fig_fname}.pdf")
+
+    legend_fig = create_legend(ax=axs[0, 0])
+    legend_fig.show()
+    legend_fig.savefig(f"images/cluster_results/{fig_fname}_legend.pdf")
+
+
+def scatter_methods(path, csv_fname, lines,
+                mx1='acc', my1='anfr',
+                mx2='robacc', my2='rnfr',
+                loss_ids=(0, 1, 2, 3),
+                fig_fname='clusters',
+                diff=True):
+
+    nrows, ncols = 2, len(loss_ids) - 1
+
+    df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
+
+    res_new = df.loc[df['Loss'] == 'new'].iloc[:, 2:].to_numpy()
+    res_pct = df.loc[df['Loss'] == 'PCT'].iloc[:, 2:].to_numpy()
+    res_pctat = df.loc[df['Loss'] == 'PCT-AT'].iloc[:, 2:].to_numpy()
+    res_rfat = df.loc[df['Loss'] == 'MixMSE-AT'].iloc[:, 2:].to_numpy()
+
+    res_list = [res_new, res_pct, res_pctat, res_rfat]
+
+    fig, axs = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 5 * nrows))
+
+    for col_j, loss_id in enumerate(loss_ids[1:]):
+        if loss_id == 0:
+            continue
+        for row_i, (x_metric, y_metric) in enumerate([(mx1, my1), (mx2, my2)]):
+            scatter_ft_results(ax=axs[row_i, col_j], res_list=res_list,
+                               x_metric=x_metric, y_metric=y_metric,
+                               lines=lines, diff=diff,
+                               loss_ids=(0, loss_id))
+
+            axs[row_i, col_j].set_xlabel(METRIC_TITLES[metric_to_id_dict[x_metric]])
+            axs[row_i, col_j].set_ylabel(METRIC_TITLES[metric_to_id_dict[y_metric]])
+
+        axs[0, col_j].set_title(LOSS_NAMES[loss_id])
+
+    fig.tight_layout()
+    fig.show()
+
+    fig.savefig(f"images/cluster_results/{fig_fname}_{'diff' if diff else ''}_methods.pdf")
+
+    # legend_fig = create_legend(ax=axs[0, 0])
+    # legend_fig.show()
+    # legend_fig.savefig(f"images/cluster_results/{fig_fname}_methods_{'diff' if diff else ''}_legend.pdf")
+
+
+def scatter_all(path, csv_fname,
+                lines=False,
+                mx1='acc', my1='anfr',
+                mx2='robacc', my2='rnfr',
+                loss_ids=(0, 1, 2, 3),
+                fig_fname='clusters',
+                diff=False):
+
+    nrows, ncols = 1, 2
+
+    df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
+
+    # model_pairs = df['Models'].unique()
+    # old_models = [mp.split('old-')[-1].split('_new-')[0] for mp in model_pairs]
+    # new_models = [mp.split('old-')[-1].split('_new-')[0] for mp in model_pairs]
+
+    res_new = df.loc[df['Loss'] == 'new'].iloc[:, 2:].to_numpy()
+    res_pct = df.loc[df['Loss'] == 'PCT'].iloc[:, 2:].to_numpy()
+    res_pctat = df.loc[df['Loss'] == 'PCT-AT'].iloc[:, 2:].to_numpy()
+    res_rfat = df.loc[df['Loss'] == 'MixMSE-AT'].iloc[:, 2:].to_numpy()
+
+    res_list = [res_new, res_pct, res_pctat, res_rfat]
+
+    fig, axs = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 5 * nrows))
+
+    for col_j, (x_metric, y_metric) in enumerate([(mx1, my1), (mx2, my2)]):
+
+        scatter_ft_results(axs[0, col_j], res_list,
+                           x_metric, y_metric, loss_ids, lines, diff)
+        xlabel = METRIC_TITLES[metric_to_id_dict[x_metric]]
+        ylabel = METRIC_TITLES[metric_to_id_dict[y_metric]]
+
+        if diff:
+            xlabel = f"$\Delta$ {xlabel}"
+            ylabel = f"$\Delta$ {ylabel}"
+
+
+        axs[0, col_j].set_xlabel(xlabel)
+        axs[0, col_j].set_ylabel(ylabel)
+
+    axs[0, 1].set_xlim(xmax=10)
+    axs[0, 1].set_ylim(ymin=-80)
+
+
+    # inset axes....
+    xstart, ystart = .1, .01
+    xend, yend = .85, .55
+    xdim = xend - xstart
+    ydim = yend - ystart
+    axins = axs[0, 1].inset_axes([xstart, ystart,
+                                  xdim, ydim])
+    scatter_ft_results(axins, res_list,
+                       x_metric, y_metric,
+                       loss_ids, lines, diff)
+    # subregion of the original image
+    x1, x2, y1, y2 = -8, 1, -3, 6
+    axins.set_xlim(x1, x2)
+    axins.set_ylim(y1, y2)
+    # axins.xaxis.set_ticks_position('top')
+    # axins.yaxis.set_ticks_position('right')
+    axins.tick_params(labelbottom=False, labeltop=True,
+                      labelleft=False, labelright=True)
+
+    axs[0, 0].tick_params(labelbottom=False, labeltop=True)
+    axs[0, 1].tick_params(labelbottom=False, labeltop=True)
+
+    axs[0, 1].indicate_inset_zoom(axins, edgecolor="black")
+    fig.tight_layout()
+    fig.show()
+
+    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.pdf")
+
+    legend_fig = create_legend(ax=axs[0, 0])
+    legend_fig.show()
+    legend_fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_legend.pdf")
+
+
+if __name__ == '__main__':
+    PATH = r'results\day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    CSV_FNAME = 'model_results_test_with_val_criteria-S-NFR.csv'
+    lines = False
+    diff = True
+    loss_ids = (0, 1, 2, 3)
+
+    scatter_all(path=PATH, csv_fname=CSV_FNAME, lines=lines,
+                loss_ids=loss_ids,
+                mx1='acc', my1='anfr',
+                mx2='robacc', my2='rnfr',
+                diff=diff)
+
+    # scatter_methods(path=PATH, csv_fname=CSV_FNAME, lines=lines,
+    #             mx1='acc', my1='anfr',
+    #             mx2='robacc', my2='rnfr',
+    #             diff=diff)
+
+    # scatter_models(path=PATH, csv_fname=CSV_FNAME, lines=True)
+    print("")
+
+
+

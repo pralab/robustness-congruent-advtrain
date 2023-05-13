@@ -363,3 +363,18 @@ def plot_sequence_results_android(results_path,
     fig.tight_layout()
     fig.show()
     fig.savefig(f"images/android/{fig_fname}.pdf")
+
+
+def create_legend(ax):
+    # create legend
+    h, l = ax.get_legend_handles_labels()
+    legend_dict = dict(zip(l, h))
+    legend_fig = plt.figure(figsize=(10, 0.5))
+
+    legend_fig.legend(legend_dict.values(), legend_dict.keys(), loc='center',
+                      ncol=len(legend_dict.values()), frameon=False)
+    legend_fig.tight_layout()
+
+    return legend_fig
+
+
