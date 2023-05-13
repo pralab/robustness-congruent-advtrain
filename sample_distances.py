@@ -122,9 +122,9 @@ def retrieve_distances_data(model_id_list, exp_path, logger=None):
     adv_preds_matrix = np.array(adv_preds_matrix)
 
     n_samples = min(distances_matrix.shape[1], clean_preds_matrix.shape[1], adv_preds_matrix.shape[1])
-    distances_matrix = distances_matrix[:n_samples]
-    clean_preds_matrix = clean_preds_matrix[:n_samples]
-    adv_preds_matrix = adv_preds_matrix[:n_samples]
+    distances_matrix = distances_matrix[:, :n_samples]
+    clean_preds_matrix = clean_preds_matrix[:, :n_samples]
+    adv_preds_matrix = adv_preds_matrix[:, :n_samples]
     
     data = {'model_ids': model_ids_ok,
             'model_names': model_names_ok,
@@ -159,12 +159,12 @@ def main(args):
 
 
     set_all_seed(random_seed)
-    data = compute_distances_pipeline(model_id_list=model_id_list, 
-                            exp_path=exp_path, ts_loader=ts_loader,
-                            logger=logger, device=device,
-                            random_seed=random_seed)
+    # data = compute_distances_pipeline(model_id_list=model_id_list, 
+    #                         exp_path=exp_path, ts_loader=ts_loader,
+    #                         logger=logger, device=device,
+    #                         random_seed=random_seed)
     
-    # data = retrieve_distances_data(model_id_list=model_id_list, exp_path=exp_path)
+    data = retrieve_distances_data(model_id_list=model_id_list, exp_path=exp_path)
     
     with open(join(exp_path, 'base_distances.gz'), 'wb') as f:
         pickle.dump(data, f)
