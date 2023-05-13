@@ -21,27 +21,35 @@ from manage_files import delete_advx_ts
 
 # import foolbox as fb
 from adv_lib.attacks.auto_pgd import apgd
+from adv_lib.attacks import fmn
 
 import time
 
 def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
-                    eps=0.03, n_steps=250, n_max_advx_samples=2000):
+                    eps=0.03, n_steps=250, n_max_advx_samples=2000, attack='apgd'):
     """
     crea una cartella dove per ogni sample salva il singolo tensore in ds_path.
     i sample sono rinominati in ordine crescente come vengono incontrati nel ds originale
     """
     
+    assert attack in ('apgd', 'fmn')
+    
     model.to(device)
     model.eval()
 
+    if not os.path.isdir(ds_path):
+        os.makedirs(ds_path)
     
     k=0 # index for samples
     with tqdm(total=len(ds_loader)) as t:
         for batch_idx, (x,y) in enumerate(ds_loader):
             x, y = x.to(device), y.to(device)
             # x.requires_grad = True
-            advx = apgd(model, x, y,
-                        eps=eps, norm=float('inf'), n_iter=n_steps)
+            if attack=='apgd':
+                advx = apgd(model, x, y, eps=eps, norm=float('inf'), n_iter=n_steps)
+            if attack=='fmn':
+                advx = fmn(model, x, y, norm=float('inf'), steps=n_steps)
+                
             t.set_postfix(
                 compl='[{}/{} ({:.0f}%)]'.format(
                     batch_idx * len(x),
@@ -65,7 +73,7 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
 
 
 
-def generate_advx(ds_loader, model, adv_dir_path, logger, device,
+def generate_advx(ds_loader, model, adv_dir_path, logger, device, attack='apgd',
                   eps=0.03, n_steps=50, model_name=None, n_max_advx_samples=2000):
     """
     ft_models e tr_set specificano solo una cartella diversa rispetto agli advx 
@@ -74,9 +82,6 @@ def generate_advx(ds_loader, model, adv_dir_path, logger, device,
     cartella advx_folder con dentro gli advx WB per ogni modello selezionato
     """
 
-    if not os.path.isdir(adv_dir_path):
-        os.makedirs(adv_dir_path)
-    
     ds = ds_loader.dataset
     batch_size_temp = ds_loader.batch_size
     escape_flag = 5
@@ -84,7 +89,8 @@ def generate_advx(ds_loader, model, adv_dir_path, logger, device,
         try:
             ds_loader_temp = DataLoader(ds, batch_size=batch_size_temp)
             generate_advx_ds(model=model, ds_loader=ds_loader_temp, 
-                            ds_path=adv_dir_path, device=device, eps=eps, n_steps=n_steps, n_max_advx_samples=n_max_advx_samples)
+                            ds_path=adv_dir_path, device=device, attack=attack,
+                            eps=eps, n_steps=n_steps, n_max_advx_samples=n_max_advx_samples)
             logger.debug("Advx generation completed.")
 
         except Exception as e:
