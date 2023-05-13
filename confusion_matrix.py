@@ -6,14 +6,20 @@ import seaborn as sns
 from itertools import product
 from utils.eval import compute_nflips
 import matplotlib.pyplot as plt
-import matplotlib
+import matplotlib as mpl
 
-matplotlib.rcParams['mathtext.fontset'] = 'stix'
-matplotlib.rcParams['font.size'] = 15.5
-matplotlib.rcParams['font.family'] = 'STIXGeneral'
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-matplotlib.rcParams['mathtext.fontset'] = 'stix'
+mpl.rcParams.update(mpl.rcParamsDefault)
+import scienceplots
+plt.style.use('science')
+
+mpl.rcParams['font.size'] = 15
+
+# matplotlib.rcParams['mathtext.fontset'] = 'stix'
+# matplotlib.rcParams['font.size'] = 15.5
+# matplotlib.rcParams['font.family'] = 'STIXGeneral'
+# matplotlib.rcParams['pdf.fonttype'] = 42
+# matplotlib.rcParams['ps.fonttype'] = 42
+# matplotlib.rcParams['mathtext.fontset'] = 'stix'
 
 def compute_churn_matrix(model_ids = (1,2,3),
                         root='results',
@@ -81,7 +87,6 @@ def plot_all_churn_matrix():
     with open('results/perf_matrix.gz', 'rb') as f:
         data = pickle.load(f)
 
-    fig_all, ax_all = plt.subplots(1, 4, figsize=(22, 7), squeeze=True)
     for adv in (False, True):
         fig, ax = plt.subplots(1, 2, figsize=(11, 7), squeeze=True)
 
@@ -102,11 +107,20 @@ def plot_all_churn_matrix():
         ax[1].set_xticks(np.arange(len(data['model_names'])) + 0.5,
                          model_names_short,
                          rotation=45)
-        titles = ['Accuracy', 'NFR']
-        for j, title_j in enumerate(titles):
-            ax[j].set_title(f'{"Robust " if adv else ""}{titles[j]} (%)')
-            if j % 2 == 0:
-                ax[j].set_xlim([0, 100])
+
+        if adv:
+            titles = ['Robust Accuracy', 'RNFR']
+        else:
+            titles = ['Clean Accuracy', 'ANFR']
+
+        for i, t in enumerate(titles):
+            ax[i].set_title(f"{t} (\%)")
+
+        ax[0].set_xlim([0, 100])
+        ax[0].minorticks_off()
+        ax[1].minorticks_off()
+
+
         fig.tight_layout()
         fig.show()
         fig.savefig(f'images/churn_matrix_{"robs" if adv else "accs"}.pdf')
@@ -167,8 +181,8 @@ if __name__ == '__main__':
     # with open('results/perf_matrix.gz', 'wb') as f:
     #     pickle.dump(data, f)
 
-    # plot_all_churn_matrix()
+    plot_all_churn_matrix()
 
-    find_candidate_model_pairs()
+    # find_candidate_model_pairs()
 
     print("")
