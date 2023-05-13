@@ -365,11 +365,41 @@ def plot_sequence_results_android(results_path,
     fig.savefig(f"images/android/{fig_fname}.pdf")
 
 
-def create_legend(ax):
+def fill_quadrants(ax, xlim=(), ylim=()):
+
+    color_q_list = ['orange', 'tomato', 'blue', 'green']
+    hatch_list = ['//', '\\\\', '||', '--']
+    # hatch_list = ['++']*4
+    ij_list = [(1, 1), (0, 1), (0, 0), (1, 0)]
+    quadrant_labels = ["$Q_1$", "$Q_2$", "$Q_3$", "$Q_4$"]
+    alpha = .2
+    zorder = -100
+
+    if len(xlim) == 0:
+        xlim = ax.get_xlim()
+    if len(ylim) == 0:
+        ylim = ax.get_ylim()
+
+    for q, (color_q, hatch, (i, j), q_label) in enumerate(zip(color_q_list,
+                                      hatch_list,
+                                      ij_list,
+                                      quadrant_labels)):
+        if q in (1, 3):
+            ax.add_patch(Rectangle((0, 0), xlim[i], ylim[j],
+                                   color=color_q,
+                                   fill=True,
+                                   # hatch=hatch,
+                                   alpha=alpha,
+                                   # label=q_label,
+                                   zorder=zorder)
+                         )
+
+
+def create_legend(ax, figsize=(10, 0.5)):
     # create legend
     h, l = ax.get_legend_handles_labels()
     legend_dict = dict(zip(l, h))
-    legend_fig = plt.figure(figsize=(10, 0.5))
+    legend_fig = plt.figure(figsize=figsize)
 
     legend_fig.legend(legend_dict.values(), legend_dict.keys(), loc='center',
                       ncol=len(legend_dict.values()), frameon=False)
@@ -378,3 +408,49 @@ def create_legend(ax):
     return legend_fig
 
 
+def set_grid(ax, major_delta, minor_delta=None,
+             alpha_maj=0.7, alpha_min=0.4,
+             linewidth_maj=.5, linewidth_min=.2,
+             linestyle_maj='dashdot', linestyle_min='dotted'
+             ):
+    # Save axis limits
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    xmin = (xlim[0] - xlim[0] % major_delta) - major_delta
+    xmax = (xlim[1] - xlim[1] % major_delta) + major_delta
+    ymin = (ylim[0] - ylim[0] % major_delta) - major_delta
+    ymax = (ylim[1] - ylim[1] % major_delta) + major_delta
+
+    major_ticks = np.arange(min(xmin, ymin), max(xmax, ymax), major_delta)
+    ax.set_xticks(major_ticks)
+    ax.set_yticks(major_ticks)
+    ax.grid(which='major', alpha=alpha_maj,
+            linewidth=linewidth_maj,
+            linestyle=linestyle_maj,
+            zorder=-100)
+
+    if minor_delta is not None:
+        minor_ticks = np.arange(min(xmin, ymin), max(xmax, ymax), minor_delta)
+        ax.set_xticks(minor_ticks, minor=True)
+        ax.set_yticks(minor_ticks, minor=True)
+        ax.grid(which='minor', alpha=alpha_min,
+                linewidth=linewidth_min,
+                linestyle=linestyle_min,
+                zorder=-100)
+
+        # Restore axis limits (with different ticks it changes visualization)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+
+def plot_axis_lines(ax, linestyle='solid', color='grey',
+                    alpha=0.99, zorder=-100):
+    ax.hlines(y=0, xmin=-100, xmax=100,
+              linestyle=linestyle, color=color, alpha=alpha, zorder=zorder)
+    ax.vlines(x=0, ymin=-100, ymax=100,
+              linestyle=linestyle, color=color, alpha=alpha, zorder=zorder)
+
+def remove_ticklabels(ax):
+    ax.set_xticklabels(['']*len(ax.get_xticks()))
+    ax.set_yticklabels([''] * len(ax.get_yticks()))
