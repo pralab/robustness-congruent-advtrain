@@ -10,6 +10,8 @@ import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 
+import pandas as pd
+
 # ordinati dalla leaderboard su github (a fine pagina)
 
 # #ordinati per la robustness misurata su 2k sample advx
@@ -110,6 +112,17 @@ FINETUNING_DIRNAME_DEFAULT = 'finetuned_models'
 FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
+
+def get_chosen_ftmodels_path(csv_path, loss_name='MixMSE-AT'):
+    df = pd.read_csv(csv_path, skipinitialspace=True)
+    df = df[df.columns[:3]]
+    df = df.loc[df['Loss'] == loss_name]
+
+    path_list = []
+    for i in range(df.shape[0]):
+        path_list.append(join(df.iloc[i, 0], df.iloc[i, 1], df.iloc[i, 2]))
+
+    return path_list
 
 def model_pairs_str_to_ids(model_pair_str):
     old_id, new_id = (int(i) for i in model_pair_str.split('old-')[1].split('_new-'))
