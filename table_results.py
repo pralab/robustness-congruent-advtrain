@@ -97,6 +97,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
                                         math.nan, math.nan, math.nan, 
                                         math.nan, math.nan, math.nan])
                         continue
+
             # Compute common churn (BNF)
             bnfr = retrieve_baseline_bnf(model_pair_dir)
             rows_old_new = [['old', math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
@@ -150,7 +151,8 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
         fname = f"{fname}_{'best' if ds_name == 'val' else select}"
         fname = f"{fname}_criteria-{criteria}"
         
-        model_results_df_list.to_csv(f"results/{fname}.csv")
+        csv_fname = f"{fname}.csv"
+        model_results_df_list.to_csv(join(path, csv_fname))
         latex_table(model_results_df_list, dir_out=path, fname=fname)
         print(os.path.join(path, fname))
     
@@ -273,11 +275,14 @@ def main_latex_table():
     csv_fname = 'model_results_test_with_val_criteria-S-NFR.csv'
     dir_out = 'latex_files'
     fname = 'models_results_test_snfr.tex'
-    df = pd.read_csv(join(root_path, csv_fname))
+    df = pd.read_csv(join(root_path, csv_fname), index_col=[0, 1], skipinitialspace=True)
 
 
     latex_table(df=df, dir_out=dir_out, fname=fname)
 
+    print("")
+
 
 if __name__ == '__main__':
-    main_latex_table()
+    main_create_table()
+    # main_latex_table()
