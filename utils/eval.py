@@ -101,11 +101,24 @@ def compute_pflips(old_preds, new_preds, indexes=False):
     pf_idxs = ((~old_preds) & new_preds)
     return pf_idxs if indexes else pf_idxs.mean()
 
-def compute_common_nflips(clean_nf_idxs, advx_nf_idxs):
-    only_rob_nfr = ((~clean_nf_idxs) & advx_nf_idxs).mean()
-    only_acc_nfr = ((clean_nf_idxs) & ~advx_nf_idxs).mean()
-    common_nfr = ((clean_nf_idxs) & advx_nf_idxs).mean()
-    return only_rob_nfr, only_acc_nfr, common_nfr
+def compute_common_nflips(clean_nf_idxs, advx_nf_idxs, indexes=False):
+    """
+
+    :param clean_nf_idxs:
+    :param advx_nf_idxs:
+    :param indexes:
+    :return: only_acc_nf, only_rob_nf, common_nf
+    """
+    only_acc_nf = ((clean_nf_idxs) & ~advx_nf_idxs)
+    only_rob_nf = ((~clean_nf_idxs) & advx_nf_idxs)
+    common_nf = ((clean_nf_idxs) & advx_nf_idxs)
+
+    if not indexes:
+        only_acc_nf = only_acc_nf.mean()
+        only_rob_nf = only_rob_nf.mean()
+        common_nf = common_nf.mean()
+
+    return only_acc_nf, only_rob_nf, common_nf
 
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     model = model.to(device)
