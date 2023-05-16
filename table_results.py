@@ -175,6 +175,11 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
 
 def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models_results'):
     df.drop(['Hparams'], axis=1, inplace=True)
+    old_cols = df.columns.to_list()
+    new_cols = ['\\cleanacc', '\\robustacc', '\\anfr', '\\rnfr', '\\bnfr', '\\snfr']
+    cols_dict = {k: v for k, v in zip(old_cols, new_cols)}
+    df = df.rename(columns=cols_dict)
+
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
 
     idxs_best_list = []
@@ -273,11 +278,19 @@ def main_latex_table():
     csv_fname = 'model_results_test_with_val_criteria-S-NFR.csv'
     dir_out = 'latex_files'
     fname = 'models_results_test_snfr.tex'
-    df = pd.read_csv(join(root_path, csv_fname))
+    df = pd.read_csv(join(root_path, csv_fname), index_col=[0, 1], skipinitialspace=True)
 
 
     latex_table(df=df, dir_out=dir_out, fname=fname)
 
+    print("")
+
+
+
 
 if __name__ == '__main__':
     main_latex_table()
+
+    # csv_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models/model_results_test_with_val_criteria-S-NFR.csv'
+    # loss_name = 'MixMSE-AT'
+    # get_chosen_ftmodels_path(csv_path, loss_name)
