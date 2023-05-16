@@ -24,8 +24,8 @@ def hparams_selector(df, criteria, model_ids, select_hparams, ascending=True):
     return df
 
 
-def table_new(path, model_ids=None, old_model_ids=None, loss_names=None, 
-              select='with_val', criteria='S-NFR', ascending=True):
+def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
+                 select='with_val', criteria='S-NFR', ascending=True):
     """
     select:
     - 'best': best hparams for valid and test set
@@ -73,18 +73,18 @@ def table_new(path, model_ids=None, old_model_ids=None, loss_names=None,
                     
                     try:
                         with open(os.path.join(hparams_path, f"results_{ds_name}.gz"), 'rb') as f:
-                            results_test = pickle.load(f)
+                            results_ds = pickle.load(f)
                             
 
-                        acc0, acc1, acc = results_test['clean']['old_acc'], results_test['clean']['orig_acc'], results_test['clean']['new_acc']
-                        nfr1, nfr = results_test['clean']['orig_nfr'], results_test['clean']['nfr']
-                        rob_acc0, rob_acc1, rob_acc = results_test['advx']['old_acc'], results_test['advx']['orig_acc'], results_test['advx']['new_acc']
-                        rob_nfr1, rob_nfr = results_test['advx']['orig_nfr'], results_test['advx']['nfr']
+                        acc0, acc1, acc = results_ds['clean']['old_acc'], results_ds['clean']['orig_acc'], results_ds['clean']['new_acc']
+                        nfr1, nfr = results_ds['clean']['orig_nfr'], results_ds['clean']['nfr']
+                        rob_acc0, rob_acc1, rob_acc = results_ds['advx']['old_acc'], results_ds['advx']['orig_acc'], results_ds['advx']['new_acc']
+                        rob_nfr1, rob_nfr = results_ds['advx']['orig_nfr'], results_ds['advx']['nfr']
                         
                         # common_nfr1 = 
                         # sum_nfr1 = 
                         # todo: calcolare common_nfr1!!! accrocchio da risolvere
-                        _, _, common_nfr = compute_common_nflips(results_test['clean']['nf_idxs'], results_test['advx']['nf_idxs'])
+                        _, _, common_nfr = compute_common_nflips(results_ds['clean']['nf_idxs'], results_ds['advx']['nf_idxs'])
                         sum_nfr = nfr + rob_nfr - common_nfr
                         sum_nfr1 = nfr1 + rob_nfr1
 
@@ -112,7 +112,7 @@ def table_new(path, model_ids=None, old_model_ids=None, loss_names=None,
                                                        ascending=ascending)
                 # model_ft_results_df = model_ft_results_df.sort_values(by=criteria, ascending=True).drop_duplicates(['Loss']).sort_index()
             else: #if test
-                if select=='with_val':
+                if select == 'with_val':
                     # select_hparams[model_pair_dir].merge(right=model_ft_results_df, on=['Loss', 'Hparams'], how='left')
                     # model_ft_results_df['Select'] = select_hparams[model_pair_dir]
                     # model_ft_results_df = model_ft_results_df.sort_values(by='Select', ascending=True).drop_duplicates(['Loss']).sort_index()
@@ -257,9 +257,9 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
     print("")
 
 
-if __name__ == '__main__':
-    old_model_ids=[1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
-    model_ids=    [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
+def main_create_table():
+    old_model_ids = [1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
+    model_ids = [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
     # old_model_ids=[2, 4,]
     # model_ids=    [4, 7]
     loss_names = ['PCT', 'PCT-AT', 'MixMSE-AT']
@@ -267,16 +267,20 @@ if __name__ == '__main__':
     criteria = 'S-NFR'
     ascending = False
     # criteria = 'acc-rob-protocol'
-    
-    
-    table_new(path=path, old_model_ids=old_model_ids, model_ids=model_ids, 
-            loss_names=loss_names, criteria=criteria, ascending=ascending)
-    
-    # path="results/day-25-01-2023_hr-15-38-00_CLEAN_TR_backup"
-    
-    # with open(os.path.join(path, "all_nf_idxs.pkl"), 'rb') as f:
-    #     nf_idxs = pickle.load(f)
-    
-    # print("")
-    
-    # table_model_results()
+
+    create_table(path=path, old_model_ids=old_model_ids, model_ids=model_ids,
+                 loss_names=loss_names, criteria=criteria, ascending=ascending)
+
+def main_latex_table():
+    root_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    csv_fname = 'model_results_test_with_val_criteria-S-NFR.csv'
+    dir_out = 'latex_files'
+    fname = 'models_results_test_snfr.tex'
+    df = pd.read_csv(join(root_path, csv_fname))
+
+
+    latex_table(df=df, dir_out=dir_out, fname=fname)
+
+
+if __name__ == '__main__':
+    main_latex_table()
