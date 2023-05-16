@@ -111,6 +111,10 @@ FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
+def model_pairs_str_to_ids(model_pair_str):
+    old_id, new_id = (int(i) for i in model_pair_str.split('old-')[1].split('_new-'))
+    return old_id, new_id
+
 def join(*args):
     path = fm.join(*args).replace('\\', '/')
     return path

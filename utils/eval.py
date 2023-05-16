@@ -3,6 +3,9 @@ import math
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+import pickle
+from .utils import model_pairs_str_to_ids, MODEL_NAMES
+
 
 def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, device=None):
     if device is None:
@@ -37,6 +40,7 @@ def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, devi
                 }
 
     return results
+
 
 def correct_predictions(model, test_loader, device):
     model = model.to(device)
@@ -83,6 +87,7 @@ def get_ds_outputs(model, ds_loader, device):
 #     nf_idxs = (old_preds != new_preds) & (old_preds == y)
 #     return nf_idxs.mean()
 
+
 def compute_nflips(old_preds, new_preds, indexes=False):
     if not isinstance(old_preds, np.ndarray):
         old_preds = old_preds.cpu().tolist()
@@ -91,6 +96,7 @@ def compute_nflips(old_preds, new_preds, indexes=False):
     new_preds = pd.Series(new_preds)
     nf_idxs = (old_preds & (~new_preds))
     return nf_idxs if indexes else nf_idxs.mean()
+
 
 def compute_pflips(old_preds, new_preds, indexes=False):
     if not isinstance(old_preds, np.ndarray):
@@ -101,11 +107,36 @@ def compute_pflips(old_preds, new_preds, indexes=False):
     pf_idxs = ((~old_preds) & new_preds)
     return pf_idxs if indexes else pf_idxs.mean()
 
+
 def compute_common_nflips(clean_nf_idxs, advx_nf_idxs):
     only_rob_nfr = ((~clean_nf_idxs) & advx_nf_idxs).mean()
     only_acc_nfr = ((clean_nf_idxs) & ~advx_nf_idxs).mean()
     common_nfr = ((clean_nf_idxs) & advx_nf_idxs).mean()
     return only_rob_nfr, only_acc_nfr, common_nfr
+
+
+def retrieve_baseline_bnf(model_pair_str):
+    old_id, new_id = model_pairs_str_to_ids(model_pair_str)
+    old_correct_clean_path = f"results/clean/{MODEL_NAMES[old_id]}/correct_preds.gz"
+    new_correct_clean_path = f"results/clean/{MODEL_NAMES[new_id]}/correct_preds.gz"
+    old_correct_adv_path = f"results/advx/{MODEL_NAMES[old_id]}/correct_preds_test.gz"
+    new_correct_adv_path = f"results/advx/{MODEL_NAMES[new_id]}/correct_preds_test.gz"
+    
+    with open(old_correct_clean_path, 'rb') as f:
+        old_correct_clean = pickle.load(f)
+    with open(new_correct_clean_path, 'rb') as f:
+        new_correct_clean = pickle.load(f)
+    with open(old_correct_adv_path, 'rb') as f:
+        old_correct_adv = pickle.load(f)
+    with open(new_correct_adv_path, 'rb') as f:
+        new_correct_adv = pickle.load(f)
+    
+    anf = compute_nflips(old_correct_clean, new_correct_clean, indexes=True)
+    rnf = compute_nflips(old_correct_adv, new_correct_adv, indexes=True)
+    _, _, bnfr = compute_common_nflips(anf, rnf)
+    
+    return bnfr
+
 
 def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
     model = model.to(device)
