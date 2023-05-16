@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
-from utils.utils import MODEL_NAMES, join
-from utils.eval import compute_common_nflips
+from utils.utils import MODEL_NAMES, join, model_pairs_str_to_ids
+from utils.eval import compute_common_nflips, retrieve_baseline_bnf
 from utils.data import sort_df
 import pickle
 import math
@@ -37,7 +37,6 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
     
     for ds_name in ['val', 'test']:
         print(f"Dataset: {ds_name}")
-        rows = []
         
         if (model_ids is not None) and (old_model_ids is not None):
             model_pair_dirs = [f"old-{old_id}_new-{new_id}" for (old_id, new_id) in zip(old_model_ids, model_ids)]
@@ -98,11 +97,10 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
                                         math.nan, math.nan, math.nan, 
                                         math.nan, math.nan, math.nan])
                         continue
-            
-            # rows_model_i = [[f"M{Mold}", math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
-            #                 [f"M{Mnew}", math.nan, acc1, rob_acc1, nfr1, rob_nfr1, math.nan, sum_nfr1]]
+            # Compute common churn (BNF)
+            bnfr = retrieve_baseline_bnf(model_pair_dir)
             rows_old_new = [['old', math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
-                            ['new', math.nan, acc1, rob_acc1, nfr1, rob_nfr1, math.nan, sum_nfr1]]
+                            ['new', math.nan, acc1, rob_acc1, nfr1, rob_nfr1, bnfr, sum_nfr1]]
             model_base_results_df = pd.DataFrame(data=rows_old_new, columns=columns[1:])
             model_ft_results_df = pd.DataFrame(data=rows_ft, columns=columns[1:])
 
@@ -120,6 +118,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
                     model_ft_results_df = select_hparams[model_pair_dir].merge(right=model_ft_results_df, 
                                                                                 on=['Loss', 'Hparams'], 
                                                                                 how='left')
+                    print("")
                 else:
                     # model_ft_results_df['Select'] = model_ft_results_df[criteria]
                     # model_ft_results_df = model_ft_results_df.sort_values(by='Select', ascending=True).drop_duplicates(['Loss']).sort_index()
@@ -132,7 +131,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
             # model_results_df.reset_index(inplace=True, drop=True)
             model_results_df.set_index('Loss', inplace=True) 
             model_results_df[columns[3:]] *= 100
-            model_results_df.drop(['Hparams'], axis=1, inplace=True)
+            # model_results_df.drop(['Hparams'], axis=1, inplace=True)
             Mold = model_pair_dir.split('old-')[-1].split('_new')[0]
             Mnew = model_pair_dir.split('new-')[-1]
             
@@ -140,22 +139,19 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
             keys.append(model_pair_dir)
             model_results_df_list.append(model_results_df)
             
-            
-            # rows.extend(rows_old_new + rows_ft)
+        
             
         model_results_df_list = pd.concat(model_results_df_list,
                                         keys=keys)
+        # model_results_df_list.drop(['Hparams'], axis=1, inplace=True)
         
         
         fname = f'model_results_{ds_name}'
         fname = f"{fname}_{'best' if ds_name == 'val' else select}"
         fname = f"{fname}_criteria-{criteria}"
         
-        latex_table(model_results_df_list, dir_out=path, fname=fname)
         model_results_df_list.to_csv(f"results/{fname}.csv")
-        
-    
-
+        latex_table(model_results_df_list, dir_out=path, fname=fname)
         print(os.path.join(path, fname))
     
     # print(model_results_df_list)
@@ -178,6 +174,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
     
 
 def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models_results'):
+    df.drop(['Hparams'], axis=1, inplace=True)
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
 
     idxs_best_list = []
