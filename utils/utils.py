@@ -12,6 +12,9 @@ import torchvision.transforms as transforms
 
 import pandas as pd
 
+import pickle
+import json
+
 # ordinati dalla leaderboard su github (a fine pagina)
 
 # #ordinati per la robustness misurata su 2k sample advx
@@ -113,6 +116,41 @@ FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
 COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
 
+
+def select_group(old_ids, new_ids, group_id=None):
+    """
+    group_id = 0 -> select old_ids 1 and 2 (5 settings)
+    group_id = 1 -> select old_ids 3 (5 settings)
+    group_id = 2 -> select old_ids 4, 5 and 6 (4 settings)
+
+    """
+    if group_id == 0:
+        old_ids, new_ids = old_ids[:5], new_ids[:5]
+    elif group_id == 1:
+        old_ids, new_ids = old_ids[5:-4], new_ids[5:-4]
+    elif group_id == 2:
+        old_ids, new_ids = old_ids[-4:], new_ids[-4:]
+
+    return old_ids, new_ids
+
+def get_model_info(path='../models/model_info/cifar10\Linf',
+                   id_select=tuple(range(1, 8))):
+    # All info
+    models_info_df = None
+    for id, model_name in enumerate(MODEL_NAMES):
+        if id not in id_select:
+            continue
+        with open(join(path, f"{model_name}.json")) as f:
+            model_info = json.load(f)
+        # model_info['id'] = model_name
+        if models_info_df is None:
+            models_info_df = pd.DataFrame(columns=model_info.keys())
+            models_info_df.index.name = 'id'
+        models_info_df.loc[model_name] = model_info
+
+    return models_info_df
+
+
 def get_chosen_ftmodels_path(csv_path, loss_name='MixMSE-AT'):
     df = pd.read_csv(csv_path, skipinitialspace=True)
     df = df[df.columns[:3]]
@@ -123,6 +161,17 @@ def get_chosen_ftmodels_path(csv_path, loss_name='MixMSE-AT'):
         path_list.append(join(df.iloc[i, 0], df.iloc[i, 1], df.iloc[i, 2]))
 
     return path_list
+
+
+def my_load(path, format='rb'):
+    with open(path, format) as f:
+        object = pickle.load(f)
+    return object
+
+def my_save(object, path, format='wb'):
+    with open(path, format) as f:
+        pickle.dump(object, f)
+
 
 def model_pairs_str_to_ids(model_pair_str):
     old_id, new_id = (int(i) for i in model_pair_str.split('old-')[1].split('_new-'))
@@ -268,3 +317,12 @@ def rotate(x, theta):
     # ax.scatter(x_rot[:, 0], x_rot[:, 1])
     # fig.show()
     return x_rot
+
+
+if __name__ == '__main__':
+    pd.set_option('display.max_rows', 500)
+    pd.set_option('display.max_columns', 500)
+    pd.set_option('display.width', 1000)
+
+    models_info = get_model_info()
+    print("")
