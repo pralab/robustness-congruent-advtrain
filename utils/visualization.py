@@ -30,10 +30,13 @@ def _tensor_to_show(img, transforms=None):
     npimg = np.transpose(npimg, (1, 2, 0))
     return npimg
 
-def imshow(img, transforms=None, figsize=(10, 20), path=None):
+def imshow(img, ax=None, transforms=None, figsize=(10, 20), path=None):
     npimg = _tensor_to_show(img, transforms)
-    plt.figure(figsize=figsize)
-    plt.imshow(npimg, interpolation=None)
+    if ax is None:
+        plt.figure(figsize=figsize)
+        plt.imshow(npimg, interpolation=None)
+    else:
+        ax.imshow(npimg, interpolation=None)
     if path is not None:
         plt.savefig(path)
 
