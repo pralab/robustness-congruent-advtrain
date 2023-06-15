@@ -115,6 +115,9 @@ def compute_common_nflips(clean_nf_idxs, advx_nf_idxs, indexes=False):
     :param indexes:
     :return: only_acc_nf, only_rob_nf, common_nf
     """
+    n_sample = min(clean_nf_idxs.size, advx_nf_idxs.size)
+    clean_nf_idxs, advx_nf_idxs = clean_nf_idxs[:n_sample], advx_nf_idxs[:n_sample]
+
     only_acc_nf = ((clean_nf_idxs) & ~advx_nf_idxs)
     only_rob_nf = ((~clean_nf_idxs) & advx_nf_idxs)
     common_nf = ((clean_nf_idxs) & advx_nf_idxs)
