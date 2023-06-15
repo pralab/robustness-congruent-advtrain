@@ -3,15 +3,17 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 from adv_lib.attacks import fmn
 from generate_advx import generate_advx
-from utils.utils import init_logger, MODEL_NAMES, join, set_all_seed
+from utils.utils import init_logger, MODEL_NAMES, join, set_all_seed, get_chosen_ftmodels_path, model_pairs_str_to_ids
 from utils.data import get_cifar10_dataset, MyTensorDataset
 from robustbench.utils import load_model
 import os
 import pickle
 import numpy as np
 import argparse
+from utils.eval import compute_nflips, compute_common_nflips
 
 ROOT = 'results/distances_results'
+        
 
 def compute_distances(d_path, ds_loader, model, steps=50, advx_dir=None,
                       n_max_advx_samples=2000, 
@@ -29,8 +31,8 @@ def compute_distances(d_path, ds_loader, model, steps=50, advx_dir=None,
         device = torch.device(f"cuda:0" if torch.cuda.is_available()
                 else "cpu")
     
-    # if logger is not None:
-    #     print = logger.debug
+    if logger is not None:
+        print = logger.debug
     
     # generate_advx(model=model, ds_loader=ds_loader, n_steps=50, attack='fmn',
     #         adv_dir_path=exp_path,
@@ -41,7 +43,7 @@ def compute_distances(d_path, ds_loader, model, steps=50, advx_dir=None,
     
     set_all_seed(random_seed)
     
-    if not os.path.exists(advx_dir):
+    if not os.path.exists(advx_dir): 
         generate_advx(ds_loader=ds_loader, model=model, adv_dir_path=advx_dir, 
                     logger=logger, device=device, attack='fmn', eps=8/255,
                     n_steps=steps, n_max_advx_samples=n_max_advx_samples)
@@ -55,8 +57,8 @@ def compute_distances(d_path, ds_loader, model, steps=50, advx_dir=None,
         
         distances = torch.tensor([])
         logits = torch.tensor([])
-        for batch_i, ((x,y), (xadv, yadv)) in enumerate(zip(ds_loader, adv_ds_loader)):
-            x, y = x.to(device), y.to(device)
+        for batch_i, ((x, _), (xadv, _)) in enumerate(zip(ds_loader, adv_ds_loader)):
+            x = x.to(device)
             xadv = xadv.to(device)
             # distances in input space
             distances_i = (x-xadv).flatten(1).norm(p=float('inf'), dim=1)
@@ -91,11 +93,24 @@ def compute_distances_pipeline(model_id_list, exp_path, ts_loader, logger,
     # COMPUTE DISTANCES
     ###########################
     nope_list = []
-    for model_id in model_id_list:
-        model_name = MODEL_NAMES[model_id]
+    for model_id in model_id_list:   
+        if isinstance(model_id, int):
+            model_name = MODEL_NAMES[model_id]
+            model = load_model(model_name, dataset='cifar10', threat_model='Linf')
+        elif isinstance(model_id, str):
+            model_name = model_id.split('/')[-5]
+            if model_name != 'old-3_new-2':
+                continue
+            _, new_id = model_pairs_str_to_ids(model_name)
+            model = load_model(MODEL_NAMES[new_id], dataset='cifar10', threat_model='Linf')
+            checkpoint = torch.load(model_id, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            raise TypeError("You have to choose either integer model ids or strings")
+            
         logger.debug(f"Running distances on {model_id} -> {model_name}")
         d_path = join(exp_path, model_name)
-        model = load_model(model_name, dataset='cifar10', threat_model='Linf')
+        
         try:
             set_all_seed(random_seed)
             compute_distances(ds_loader=ts_loader, model=model, logger=logger, device=device,
@@ -112,19 +127,26 @@ def compute_distances_pipeline(model_id_list, exp_path, ts_loader, logger,
 
 
 def retrieve_distances_data(model_id_list, exp_path, logger):
-    clean_path = 'results/clean'
-    adv_path = 'results/advx'
 
-    
-    clean_preds_matrix = []
-    adv_preds_matrix = []    
+ 
     distances_matrix = []
     logits_matrix = []
+    clean_preds_matrix = []
+    adv_preds_matrix = []
     model_ids_ok = []
     model_names_ok = []
     for model_id in model_id_list:
-        model_name = MODEL_NAMES[model_id]
-        model_path = join(exp_path, model_name)
+        if isinstance(model_id, int):
+            model_name = MODEL_NAMES[model_id]
+            model_path = join(exp_path, model_name)
+            clean_path = join('results/clean', model_name, 'correct_preds.gz')
+            adv_path = join('results/advx', model_name, 'correct_preds_test.gz')
+        elif isinstance(model_id, str):
+            model_name = model_id.split('/')[-5]
+            model_path = join(exp_path, model_name)
+            
+            clean_path = join(model_id.split('/checkpoints')[0], 'results_clean_test.gz')
+            adv_path = join(model_id.split('/checkpoints')[0], 'results_advx_test.gz')
         distances_path = join(model_path, 'distances.gz')
         logits_path = join(model_path, 'logits.gz')
         
@@ -137,13 +159,18 @@ def retrieve_distances_data(model_id_list, exp_path, logger):
                 logits = pickle.load(f)
             logits_matrix.append(logits.tolist())
         
-            with open(join(clean_path, model_name, 'correct_preds.gz'), 'rb') as f:
+            with open(clean_path, 'rb') as f:
                 clean_preds = pickle.load(f)
-            clean_preds_matrix.append(clean_preds.tolist())
             
-            with open(join(adv_path, model_name, 'correct_preds_test.gz'), 'rb') as f:
+            with open(adv_path, 'rb') as f:
                 adv_preds = pickle.load(f)
+                
+            if isinstance(model_id, str):
+                clean_preds = clean_preds['new_correct']
+                adv_preds = adv_preds['new_correct']
+            
             adv_preds_matrix.append(adv_preds.tolist())
+            clean_preds_matrix.append(clean_preds.tolist())
             
             model_ids_ok.append(model_id)
             model_names_ok.append(model_name)
@@ -157,11 +184,12 @@ def retrieve_distances_data(model_id_list, exp_path, logger):
     clean_preds_matrix = np.array(clean_preds_matrix)
     adv_preds_matrix = np.array(adv_preds_matrix)
 
-    n_samples = min(distances_matrix.shape[1], clean_preds_matrix.shape[1], adv_preds_matrix.shape[1])
-    distances_matrix = distances_matrix[:, :n_samples]
-    logits_matrix = logits_matrix[:, :n_samples, :]
-    clean_preds_matrix = clean_preds_matrix[:, :n_samples]
-    adv_preds_matrix = adv_preds_matrix[:, :n_samples]
+    # n_samples = min(distances_matrix.shape[1], clean_preds_matrix.shape[1], adv_preds_matrix.shape[1])
+    # # n_samples = distances_matrix.shape[1]
+    # distances_matrix = distances_matrix[:, :n_samples]
+    # logits_matrix = logits_matrix[:, :n_samples, :]
+    # clean_preds_matrix = clean_preds_matrix[:, :n_samples]
+    # adv_preds_matrix = adv_preds_matrix[:, :n_samples]
     
     data = {'model_ids': model_ids_ok,
             'model_names': model_names_ok,
@@ -173,61 +201,81 @@ def retrieve_distances_data(model_id_list, exp_path, logger):
     return data
 
 def main(args):
-    model_id_list = [i+1 for i in range(7)]
     batch_size = args.batch_size    #500
     n_samples = args.n_samples  #500
     steps = args.steps  #50
+    loss_names = args.loss_name
     
     random_seed = args.random_seed
     
     device = torch.device(f"cuda:0" if torch.cuda.is_available()
                 else "cpu")
     
-    # exp_path = join(ROOT, f"base_distances_{n_samples}samples_{steps}steps")
-    # if not os.path.isdir(exp_path):
-    #     os.makedirs(exp_path)
-    exp_path = 'results/distances_results/base_distances_2000samples_50steps'
-    
-    logger = init_logger(exp_path, fname=f'progress')    
-    
-    logger.debug(args)
-    
-    ts = get_cifar10_dataset(train=False, shuffle=False, num_samples=n_samples)
-    ts_loader = DataLoader(ts, batch_size=batch_size, shuffle=False)
-    
+    base_exp_path = join(ROOT, "Linf_norm", f"base_distances_{n_samples}samples_{steps}steps")
 
-    set_all_seed(random_seed)
-    data = compute_distances_pipeline(model_id_list=model_id_list, 
-                            exp_path=exp_path, ts_loader=ts_loader,
-                            logger=logger, device=device,
-                            random_seed=random_seed,
-                            steps=steps)
+    # exp_path = 'results/distances_results/base_distances_2000samples_50steps'
     
-    data = retrieve_distances_data(model_id_list=model_id_list, exp_path=exp_path, logger=logger)
-    
-    with open(join(exp_path, 'base_distances.gz'), 'wb') as f:
-        pickle.dump(data, f)
-    
-    with open(join(exp_path, 'base_distances.gz'), 'rb') as f:
-        datax = pickle.load(f)
-    
+    for loss_name in loss_names:
+        fname = f"base_distances.gz"
+        if isinstance(loss_name, str):
+            fname = fname.replace('.gz', f"_{loss_name}_ft.gz")
+            csv_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models/model_results_test_with_val_criteria-S-NFR.csv'
+            exp_path = f"{base_exp_path}_{loss_name}_ft"
+            model_id_list = get_chosen_ftmodels_path(csv_path=csv_path, loss_name=loss_name)
+            root_exp_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+            model_id_list = [join(root_exp_path, m, 'checkpoints/last.pt') for m in model_id_list]
+            # model_id_list = [model_id_list[5]]
+        else:
+            model_id_list = [i+1 for i in range(7)]
+            exp_path = base_exp_path
+
+        if not os.path.isdir(exp_path):
+            os.makedirs(exp_path)
+        
+        # logger = init_logger(exp_path, fname=f'progress')    
+        
+        # logger.debug(args)
+        
+        # ts = get_cifar10_dataset(train=False, shuffle=False, num_samples=n_samples)
+        # ts_loader = DataLoader(ts, batch_size=batch_size, shuffle=False)
+        
+
+        # set_all_seed(random_seed)
+        # data = compute_distances_pipeline(model_id_list=model_id_list, 
+        #                         exp_path=exp_path, ts_loader=ts_loader,
+        #                         logger=logger, device=device,
+        #                         random_seed=random_seed,
+        #                         steps=steps)
+        
+        # data = retrieve_distances_data(model_id_list=model_id_list, exp_path=exp_path, logger=logger)
+        
+        
+        # with open(join(exp_path, fname), 'wb') as f:
+        #     pickle.dump(data, f)
+        
+        with open(join(exp_path, fname), 'rb') as f:
+            datax = pickle.load(f)
+        print("")
     print("")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-
-    # parser.add_argument('-n_samples', default=30, type=int)
-    # parser.add_argument('-batch_size', default=10, type=int) 
-    # parser.add_argument('-steps', default=2, type=int)   
-    # parser.add_argument('-random_seed', default=0, type=int)
-    # args = parser.parse_args()
     
     parser.add_argument('-n_samples', default=2000, type=int)
-    parser.add_argument('-batch_size', default=50, type=int) 
+    parser.add_argument('-batch_size', default=100, type=int) 
     parser.add_argument('-steps', default=50, type=int)   
+
+    # parser.add_argument('-n_samples', default=2000, type=int)
+    # parser.add_argument('-batch_size', default=50, type=int) 
+    
+    # parser.add_argument('-loss_name', default=['MixMSE-AT'], type=str, nargs='+')    
+    parser.add_argument('-loss_name', default=[None, 'PCT', 'PCT-AT', 'MixMSE-AT'], type=str, nargs='+')
+    
     parser.add_argument('-random_seed', default=0, type=int)
     args = parser.parse_args()
+    
+    # todo: finire di fare la pipeline per i 14 modelli finetunati
     
     main(args)
 

@@ -97,6 +97,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
                                         math.nan, math.nan, math.nan, 
                                         math.nan, math.nan, math.nan])
                         continue
+
             # Compute common churn (BNF)
             bnfr = retrieve_baseline_bnf(model_pair_dir)
             rows_old_new = [['old', math.nan, acc0, rob_acc0, math.nan, math.nan, math.nan, math.nan],
@@ -150,7 +151,8 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
         fname = f"{fname}_{'best' if ds_name == 'val' else select}"
         fname = f"{fname}_criteria-{criteria}"
         
-        model_results_df_list.to_csv(f"results/{fname}.csv")
+        csv_fname = f"{fname}.csv"
+        model_results_df_list.to_csv(join(path, csv_fname))
         latex_table(model_results_df_list, dir_out=path, fname=fname)
         print(os.path.join(path, fname))
     
@@ -179,7 +181,6 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
     new_cols = ['\\cleanacc', '\\robustacc', '\\anfr', '\\rnfr', '\\bnfr', '\\snfr']
     cols_dict = {k: v for k, v in zip(old_cols, new_cols)}
     df = df.rename(columns=cols_dict)
-
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
 
     idxs_best_list = []
@@ -282,15 +283,7 @@ def main_latex_table():
 
 
     latex_table(df=df, dir_out=dir_out, fname=fname)
-
-    print("")
-
-
-
+    
 
 if __name__ == '__main__':
     main_latex_table()
-
-    # csv_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models/model_results_test_with_val_criteria-S-NFR.csv'
-    # loss_name = 'MixMSE-AT'
-    # get_chosen_ftmodels_path(csv_path, loss_name)
