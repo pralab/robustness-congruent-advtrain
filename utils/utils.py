@@ -55,6 +55,13 @@ MODEL_NAMES_SHORT = ['Std.',
 'Gowal2021'
 ]
 
+# MODEL_SYMBOLS = [f"$M_{i}$" for i in range(len(MODEL_NAMES))]
+# MODEL_SYMBOLS = ['$M_0$', '$M_1$', '$M_2$', '$M_3$', '$M_4$', '$M_5$', '$M_6$', '$M_7$', '$M_8$', '$M_9$', '$M_10$']
+MODEL_SYMBOLS = ['$M_0$', '$M_1$', '$M_3$', '$M_2$', '$M_5$', '$M_4$', '$M_6$', '$M_7$', '$M_8$', '$M_9$', '$M_10$']
+
+MODEL_NAMES_LONG_SYMBOLS_DICT = {k: v for k, v in zip(MODEL_NAMES,
+                                                      MODEL_SYMBOLS)}
+
 MODEL_NAMES_LONG_SHORT_DICT = {k: v for k, v in zip(MODEL_NAMES,
                                                     MODEL_NAMES_SHORT)}
 
