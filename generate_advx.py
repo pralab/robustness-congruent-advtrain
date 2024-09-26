@@ -1,21 +1,25 @@
 from robustbench.utils import load_model
-from secml.utils import fm
+# from secml.utils import fm
 import pickle
 from utils.utils import MODEL_NAMES, advx_fname, custom_dirname, \
-    ADVX_DIRNAME_DEFAULT, FINETUNING_DIRNAME_DEFAULT, \
+    ADVX_DIRNAME_DEFAULT, ADVX_IMAGENET_DIRNAME_DEFAULT, FINETUNING_DIRNAME_DEFAULT, \
     set_all_seed, init_logger, used_memory_percentage
 from utils.eval import correct_predictions, get_pct_results, compute_nflips, compute_pflips
+import utils.utils as ut
 import math
 import torch
 import os
 from tqdm import tqdm
 import numpy as np
 
-from utils.data import get_cifar10_dataset, MyTensorDataset, split_train_valid
+from utils.data import get_cifar10_dataset, get_imagenet_dataset, \
+    MyTensorDataset, split_train_valid
 from torch.utils.data import DataLoader
 from utils.visualization import imshow
 from utils.eval import evaluate_acc
 import argparse
+import json
+import torchvision
 
 from manage_files import delete_advx_ts
 
@@ -26,7 +30,8 @@ from adv_lib.attacks import fmn
 import time
 
 def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
-                    eps=0.03, n_steps=250, n_max_advx_samples=2000, attack='apgd'):
+                    eps=8/255, n_steps=250, n_max_advx_samples=2000, attack='apgd',
+                    random_seed=0):
     """
     crea una cartella dove per ogni sample salva il singolo tensore in ds_path.
     i sample sono rinominati in ordine crescente come vengono incontrati nel ds originale
@@ -41,6 +46,8 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
         os.makedirs(ds_path)
     
     k=0 # index for samples
+    fname_to_target = {}
+    set_all_seed(random_seed)
     with tqdm(total=len(ds_loader)) as t:
         for batch_idx, (x,y) in enumerate(ds_loader):
             x, y = x.to(device), y.to(device)
@@ -58,15 +65,22 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
             t.update()
 
             for i in range(len(advx)):
-                if k>=n_max_advx_samples:
-                    return
-                file_path = os.path.join(ds_path, f"{str(k).zfill(10)}.gz")
-                advx = advx.detach().cpu()
-                y = y.detach().cpu()
-                data = (advx[i], y[i])
-                with open(file_path, 'wb') as f:
-                    pickle.dump(data, f)
+                fname = f"{str(k).zfill(10)}.png"
+                fname_to_target[fname] = y[i].item()
+
+                file_path = os.path.join(ds_path, fname)
+                torchvision.utils.save_image(advx[i], file_path)
+                # file_path = os.path.join(ds_path, f"{str(k).zfill(10)}.gz")
+                # advx = advx.detach().cpu()
+                # y = y.detach().cpu()
+                # data = (advx[i], y[i])
+                # with open(file_path, 'wb') as f:
+                #     pickle.dump(data, f)
                 k += 1
+                if k>=n_max_advx_samples:
+                    with open(os.path.join(ds_path, 'fname_to_target.json'), 'w') as f:
+                        json.dump(fname_to_target, f)
+                    return
                 
     return 
 
@@ -74,7 +88,7 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
 
 
 def generate_advx(ds_loader, model, adv_dir_path, logger, device, attack='apgd',
-                  eps=0.03, n_steps=50, model_name=None, n_max_advx_samples=2000):
+                  eps=8/255, n_steps=50, model_name=None, n_max_advx_samples=2000):
     """
     ft_models e tr_set specificano solo una cartella diversa rispetto agli advx 
     per i modelli originali sul test set
@@ -167,40 +181,54 @@ def check_baseline_advx(mid, ds_name, logger, random_seed):
     return correct_adv
 
 
-def generate_baseline_advx(model_id, ds_name='test'):
-    root = 'results/advx'
+def generate_baseline_advx(model_id, ds_name='test', imagenet=False, 
+                           cuda_id=1, batch_size=500, n_max_advx=None, eps=None):
+    root = f'results/{ADVX_DIRNAME_DEFAULT}' if not imagenet else f'results/{ADVX_IMAGENET_DIRNAME_DEFAULT}'
+    os.makedirs(root, exist_ok=True)
 
-    device = f"cuda:0" if torch.cuda.is_available() else 'cpu'
+    device = f"cuda:{cuda_id}" if torch.cuda.is_available() else 'cpu'
     logger = init_logger(root, fname=f"logger_{ds_name}")
     
-    batch_size = 500
-    train_dataset, val_dataset = split_train_valid(
-        get_cifar10_dataset(train=True, shuffle=False, num_samples=None), train_size=0.8)
-    test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=None)
+    if not imagenet:
+        _, val_dataset = split_train_valid(
+            get_cifar10_dataset(train=True, shuffle=False, num_samples=None), train_size=0.8)
+        test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=None)
+    else:
+        _, val_dataset, test_dataset = get_imagenet_dataset(normalize=False)
     # shuffle can be set to True if reference models are evaluated on the fly
     # without exploiting precomputed outputs
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # for model_id in [2,3,1]:
+
+    ds_id = ut.cifar10_id if not imagenet else ut.imagenet_id
     logger.info(f">>> Model {model_id}")
-    model_name = MODEL_NAMES[model_id]        
-    model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+    model_name = MODEL_NAMES[ds_id][model_id]        
+    # model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+    model = load_model(model_name=model_name, dataset=ds_id, threat_model='Linf')
     adv_dir_path = os.path.join(root, model_name, ds_name)
     if not os.path.isdir(adv_dir_path):
         os.makedirs(adv_dir_path)
     corrects_path = os.path.join(root, model_name, f"correct_preds_{ds_name}.gz")
     
+    if eps is None:
+        eps = ut.EPS[ds_id]
+    if n_max_advx is None:
+        n_max_advx = ut.N_MAX_ADVX[ds_id]
     ds_loader = test_loader if ds_name=='test' else val_loader
     generate_advx(ds_loader=ds_loader, model=model, 
-                    adv_dir_path=adv_dir_path,
+                    adv_dir_path=adv_dir_path, eps=eps,
                     model_name=model_name, device=device, logger=logger,
-                    n_max_advx_samples=2000)
+                    n_max_advx_samples=n_max_advx)
     adv_ds = MyTensorDataset(ds_path=adv_dir_path)
     adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
     correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
     with open(corrects_path, 'wb') as f:
         pickle.dump(correct_preds.cpu(), f)
+    
+    rob_acc = correct_preds.cpu().numpy().mean() * 100
+    logger.info(f"Robust accuracy: {rob_acc}")
 
 
 def generate_advx_main(root, logger=None):
@@ -418,24 +446,28 @@ def generate_advx_main(root, logger=None):
 
 
 
-
-
-
 if __name__ == '__main__':
     # root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB'
     # generate_advx_main(root)
+
+    # model_id = 0
+    # generate_baseline_advx(model_id=model_id, ds_name='test', n_max_advx=10, 
+    #                     cuda_id=1, batch_size=10, imagenet=True, eps=0.5)
+
+    for model_id in range(5):
+        generate_baseline_advx(model_id=model_id, ds_name='val', n_max_advx=9000, 
+                            cuda_id=1, batch_size=512, imagenet=True)
+        print("")
     
-    # generate_baseline_advx(ds_name='val')
-    
-    for m_id in range(8):
-        path = fm.join("results/advx", MODEL_NAMES[m_id], 'correct_preds_val.gz')
+    # for m_id in range(8):
+    #     path = fm.join("results/advx", MODEL_NAMES[m_id], 'correct_preds_val.gz')
         
-        try:
-            with open(path, 'rb') as f:
-                correct = pickle.load(f)
-            print(f"M{m_id}: {correct.shape[0]}")
-            print(f"M{m_id}: {correct.cpu().numpy().mean()}")
-        except:
-            pass
+    #     try:
+    #         with open(path, 'rb') as f:
+    #             correct = pickle.load(f)
+    #         print(f"M{m_id}: {correct.shape[0]}")
+    #         print(f"M{m_id}: {correct.cpu().numpy().mean()}")
+    #     except:
+    #         pass
     
     print("")
