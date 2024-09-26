@@ -191,7 +191,7 @@ def generate_baseline_advx(model_id, ds_name='test'):
         os.makedirs(adv_dir_path)
     corrects_path = os.path.join(root, model_name, f"correct_preds_{ds_name}.gz")
     
-    ds_loader = test_loader if ds_name=='test' else val_loader
+    ds_loader = test_loader if ds_name == 'test' else val_loader
     generate_advx(ds_loader=ds_loader, model=model, 
                     adv_dir_path=adv_dir_path,
                     model_name=model_name, device=device, logger=logger,

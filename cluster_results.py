@@ -36,8 +36,8 @@ metric_to_id_dict = {'acc': 0, 'robacc': 1,
                      'cleanerr': 7, 'roberr': 8}
 
 METRIC_TITLES = ['Clean Accuracy', 'Robust Accuracy',
-                 'ANFR reduction', 'RNFR reduction',
-                 'BNFR', 'SNFR', 'CUSTOM', 'Clean Error reduction', 'Adversarial Error reduction']
+                 'NFs', 'RNFs',
+                 'BNFR', 'SNFR', 'CUSTOM', 'Test Error', 'Robust Error']
 
 # METRIC_TITLES = ['C', 'R',
 #                  'ANFR', 'RNFR',
@@ -46,7 +46,7 @@ METRIC_TITLES = ['Clean Accuracy', 'Robust Accuracy',
 # METRIC_TITLES = [metric_title + ' (\%)' for metric_title in METRIC_TITLES]
 METRIC_TITLES = [metric_title + ' (%)' for metric_title in METRIC_TITLES]
 
-LOSS_NAMES = ['baseline', 'PCT', 'PCT-AT', 'RF-AT (Ours)']
+LOSS_NAMES = [r'$f_{\rm new}$', 'PCT', 'PCAT', 'RCAT (Ours)']
 COLORS = ['tab:grey', 'tab:red', 'tab:blue', 'tab:green']
 MARKERS = ['o', 'v', '^', 'D']
 # ALL_MARKERS = list(Line2D.markers.keys())
@@ -73,6 +73,11 @@ def scatter_ft_results(ax, res_list,
     """
     xmin, xmax = math.inf, 0
     ymin, ymax = math.inf, 0
+
+    # ax.scatter(0, 0, marker=MARKERS[0],
+    #            color=COLORS[0], s=120,
+    #            edgecolor='black',
+    #            label=LOSS_NAMES[0])
 
     res_new = res_list[0]
     for loss_id in loss_ids:
@@ -141,8 +146,8 @@ def scatter_ft_results(ax, res_list,
     xmax += x_margin
     ymin -= y_margin
     ymax += y_margin
-    # ax.set_xscale('symlog', base=2)
-    # ax.set_yscale('symlog', base=2)
+    ax.set_xscale('symlog', base=10)
+    ax.set_yscale('symlog', base=10)
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
@@ -290,9 +295,9 @@ def scatter_all(path, csv_fname,
         xlabel = METRIC_TITLES[metric_to_id_dict[x_metric]]
         ylabel = METRIC_TITLES[metric_to_id_dict[y_metric]]
 
-        # if diff:
-        #     xlabel = f"$\Delta$ {xlabel}"
-        #     ylabel = f"$\Delta$ {ylabel}"
+        if diff:
+            xlabel = f"$\Delta$ {xlabel}"
+            ylabel = f"$\Delta$ {ylabel}"
 
 
         axs[0, col_j].set_xlabel(xlabel)
@@ -311,6 +316,22 @@ def scatter_all(path, csv_fname,
 
     axs[0, 0].grid('on', linestyle='dashed')
     axs[0, 1].grid('on', linestyle='dashed')
+
+    ticks = [-50, -20, -10, -5, -2, -1, 0, 1]
+    axs[0, 0].set_xticks(ticks, labels=ticks)
+    axs[0, 0].set_xlim(ticks[0], ticks[-1])
+
+    ticks = [-50, -20, -10, -5, -2, -1, 0, 1, 2]
+    axs[0, 1].set_xticks(ticks, labels=ticks)
+    axs[0, 1].set_xlim(ticks[0], ticks[-1] + 0.5)
+
+    ticks = [0, 1, 2, 5, 10]
+    axs[0, 0].set_yticks(ticks, labels=ticks)
+    axs[0, 0].set_ylim(-0.1, ticks[-1])
+
+    ticks = [0, 1, 2, 5]
+    axs[0, 1].set_yticks(ticks, labels=ticks)
+    axs[0, 1].set_ylim(-0.1, ticks[-1])
     # set_grid(axs[0, 0], major_delta=5, linestyle_maj='dotted')
     # set_grid(axs[0, 1], major_delta=5, linestyle_maj='dotted')
 

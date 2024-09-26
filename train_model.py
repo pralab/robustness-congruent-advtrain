@@ -21,7 +21,7 @@ from copy import deepcopy
 from generate_advx import generate_advx, generate_baseline_advx, check_baseline_advx
 from manage_files import delete_advx_ts
 
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 # from confusion_matrix import find_candidate_model_pairs
 
@@ -267,7 +267,7 @@ def train_pct_pipeline(args):
     if not os.path.isdir(exp_path):
         os.mkdir(exp_path)
 
-    # save_params(locals().items(), exp_path, 'info')
+    save_params(locals().items(), exp_path, 'info')
 
     logger = init_logger(exp_path, fname=f'progress_{args.exp_name}')
 
@@ -336,7 +336,9 @@ def train_pct_pipeline(args):
                     #     alpha, beta = int(alpha), int(beta)
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
                     params_dir = f"a-{alpha}_b-{beta}"
-                    params_dir_path = os.path.join(loss_dir_path, params_dir)                 
+                    params_dir_path = os.path.join(loss_dir_path, params_dir)
+
+                    os.makedirs(params_dir_path, exist_ok=True)
 
                     try:
                         #####################################
@@ -527,25 +529,25 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
 
-    parser.add_argument('-exp_name', default='DEBUG', type=str)
+    parser.add_argument('-exp_name', default='DEBUG_VANILLA', type=str)
     parser.add_argument('-root', default='results', type=str)
     parser.add_argument('-adv_tr', action='store_true')
 
-    parser.add_argument('-n_tr', default=50, type=int)   
-    parser.add_argument('-n_ts', default=50, type=int) 
+    parser.add_argument('-n_tr', default=200, type=int, help='number of training samples')
+    parser.add_argument('-n_ts', default=200, type=int, help='number of test samples')
 
-    parser.add_argument('-epochs', default=1, type=int)  
-    parser.add_argument('-lr', default=1e-3, type=float)
-    parser.add_argument('-batch_size', default=50, type=int)   
+    parser.add_argument('-epochs', default=5, type=int)
+    parser.add_argument('-lr', default=1e-2, type=float)
+    parser.add_argument('-batch_size', default=100, type=int)
     
-    parser.add_argument('-n_steps', default=50, type=int)   
-    parser.add_argument('-n_adv_ts', default=50, type=int) 
+    parser.add_argument('-n_steps', default=10, type=int, help='number of attack steps during robusntess evaluation')
+    parser.add_argument('-n_adv_ts', default=200, type=int, help='number of advx used for robustness evaluation')
     
-    parser.add_argument('-old_model_ids', default=[2], type=int, nargs='+')
-    parser.add_argument('-model_ids', default=[5], type=int, nargs='+')
-    parser.add_argument('-loss_names', default=['PCT-AT', 'MixMSE-AT'], type=str, nargs='+')
-    parser.add_argument('-alphas_mix', default=[0.3, 0.5], type=float, nargs='+')
-    parser.add_argument('-betas_mix', default=[0.6, 0.4], type=float, nargs='+')
+    parser.add_argument('-old_model_ids', default=[1], type=int, nargs='+')
+    parser.add_argument('-model_ids', default=[4], type=int, nargs='+')
+    parser.add_argument('-loss_names', default=['MixMSE-AT'], type=str, nargs='+')
+    parser.add_argument('-alphas_mix', default=[1,1,1,5,10,5], type=float, nargs='+')
+    parser.add_argument('-betas_mix', default=[1,5,10,5,1,1], type=float, nargs='+')
     parser.add_argument('-alphas_pct', default=[1, 1], type=int, nargs='+')
     parser.add_argument('-betas_pct', default=[1, 5], type=int, nargs='+')
     

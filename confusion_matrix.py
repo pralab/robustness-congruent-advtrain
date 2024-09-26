@@ -97,10 +97,10 @@ def plot_churn_matrix(ax, model_names, accs, nfr,
 
 def plot_all_churn_matrix():
     with open('results/perf_matrix.gz', 'rb') as f:
-        data = pickle.load(f)
+        data = pickle.load (f)
 
     # correzioni a mano
-    data['rob_acc'] = np.array([0.5585, 0.5835, 0.5595, 0.5935, 0.5910, 0.6055, 0.6330])
+    data['rob_acc'] = np.array([0.5585, 0.5845, 0.5595, 0.5935, 0.5910, 0.6055, 0.6330])
 
     data['nfr'][1, 3] = 0.0334
     data['nfr'][2, 3] = 0.0327
