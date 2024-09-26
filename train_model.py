@@ -1,36 +1,52 @@
-from utils.data import get_cifar10_dataset, split_train_valid
-from utils.utils import MODEL_NAMES, set_all_seed, init_logger, save_params
-from torch.utils.data import DataLoader
-from robustbench.utils import load_model
-from utils.trainer import pc_train_epoch, adv_pc_train_epoch, freeze_network
+from utils.data import get_cifar10_dataset, split_train_valid, get_imagenet_dataset
+from utils.trainer import pc_train_epoch, adv_pc_train_epoch, freeze_network, fgsm_attack
 from utils.eval import get_ds_outputs, get_pct_results, compute_nflips, compute_pflips, compute_common_nflips, correct_predictions
 from utils.custom_loss import PCTLoss, MixedPCTLoss
-import torch
-import os
-from datetime import datetime
-import pickle
-import math
-import numpy as np
-import argparse
 from utils.data import MyTensorDataset
 from utils.visualization import show_hps_behaviour, plot_loss
-import matplotlib.pyplot as plt
-from copy import deepcopy
-
+import utils.utils as ut
 
 from generate_advx import generate_advx, generate_baseline_advx, check_baseline_advx
 from manage_files import delete_advx_ts
 
-from torch.utils.tensorboard import SummaryWriter
+import torch
+from torch.utils.data import DataLoader
+from robustbench.utils import load_model
+
+import os
+import pickle
+import logging
+import argparse
+from copy import deepcopy
+from datetime import datetime
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
 
 # from confusion_matrix import find_candidate_model_pairs
+
+# class EarlyStopping:
+#     def __init__(self, tolerance=5, min_delta=0):
+
+#         self.tolerance = tolerance
+#         self.min_delta = min_delta
+#         self.counter = 0
+#         self.early_stop = False
+
+#     def __call__(self, train_loss, previous_train_loss):
+#         if (previous_train_loss - train_loss) < self.min_delta:
+#             self.counter +=1
+#             if self.counter >= self.tolerance:  
+#                 self.early_stop = True
 
 
 def train_pct_model(model, old_model,
                     train_loader, val_loader,
                     epochs, loss_name, lr, random_seed, device, 
-                    alpha, beta, exp_dir, trainable_layers=None, 
-                    adv_training: bool = False, keep_best: str = 'both', writer=None,
+                    alpha, beta, exp_dir,
+                    adv_training: bool = False,
+                    ds_id=ut.cifar10_id,
                     logger=None):
     """
     Function that performs Positive Congruent Training of a model with respect to a reference model.
@@ -59,27 +75,45 @@ def train_pct_model(model, old_model,
 
     """
 
-    set_all_seed(random_seed)
-    if logger is not None:
-        print = logger.debug
+    ut.set_all_seed(random_seed)
+    # if logger is not None:
+    #     logger.debug = print
 
     # Obtain outputs of old model (the reference model) and new model (the one that we train)
-    try:
-        # If already computed load them ...
-        with open(os.path.join(exp_dir, 'baseline.gz'), 'rb') as f:
-            train_outputs = pickle.load(f)
-    except:
-        # ... otherwise compute
-        train_outputs = {}
-        train_outputs['old'] = get_ds_outputs(old_model, train_loader, device).cpu()   #needed for PCT finetuning
-        train_outputs['new'] = get_ds_outputs(model, train_loader, device).cpu() 
-        
-        with open(os.path.join(exp_dir, 'baseline.gz'), 'wb') as f:
-            pickle.dump(train_outputs, f)
+    # try:
+    #     # If already computed load them ...
+    #     with open(os.path.join(exp_dir, 'baseline.gz'), 'rb') as f:
+    #         train_outputs = pickle.load(f)
+    # except:
+    #     # ... otherwise compute
+    #     train_outputs = {}
+    #     train_outputs['old'] = get_ds_outputs(old_model, train_loader, device).cpu()   #needed for PCT finetuning
+    #     train_outputs['new'] = get_ds_outputs(model, train_loader, device).cpu() 
+    #     os.makedirs(exp_dir, exist_ok=True)
+    #     with open(os.path.join(exp_dir, 'baseline.gz'), 'wb') as f:
+    #         pickle.dump(train_outputs, f)
 
-    old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
+    # old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
 
-    set_all_seed(random_seed)
+    # ut.set_all_seed(random_seed)
+
+    # try:
+    #     # If already computed load them ...
+    #     with open(os.path.join(exp_dir, 'val_baseline.gz'), 'rb') as f:
+    #         val_outputs = pickle.load(f)
+    # except:
+    #     # ... otherwise compute
+    #     train_outputs = {}
+    #     train_outputs['old'] = get_ds_outputs(old_model, train_loader, device).cpu()   #needed for PCT finetuning
+    #     train_outputs['new'] = get_ds_outputs(model, train_loader, device).cpu() 
+    #     os.makedirs(exp_dir, exist_ok=True)
+    #     with open(os.path.join(exp_dir, 'baseline.gz'), 'wb') as f:
+    #         pickle.dump(train_outputs, f)
+
+    # old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
+    old_outputs, new_outputs = None, None   # TODO: modified as train_loader has shuffle=True
+
+    # ut.set_all_seed(random_seed)
     
     # Define loss function based on loss_name
     # set mixmse to True when using MixMSE or the NF version as while adv training we need to keep
@@ -87,43 +121,50 @@ def train_pct_model(model, old_model,
     # To save space and computation we avoid it for PCT.
     if loss_name == 'PCT':
         loss_fn = PCTLoss(old_output_clean=old_outputs, alpha=alpha, beta=beta)
+        # val_loss_fn = PCTLoss(old_output=old_outputs, new_output=new_outputs,
+        #                       alpha=alpha, beta=beta)
         mixmse = False
         new_model = None
     elif loss_name == 'MixMSE':
         loss_fn = MixedPCTLoss(old_output=old_outputs, new_output=new_outputs,
                                 alpha=alpha, beta=beta,
                                 only_nf=False)
+        # val_loss_fn = MixedPCTLoss(old_output=old_outputs, new_output=new_outputs,
+        #                            alpha=alpha, beta=beta, only_nf=False)
         if adv_training:
             new_model = deepcopy(model).to(device)
             new_model.eval()
-
-        mixmse = True
-    elif loss_name == 'MixMSE(NF)':
-        loss_fn = MixedPCTLoss(old_output=old_outputs, new_output=new_outputs,
-                                alpha=alpha, beta=beta,
-                                only_nf=True)
         mixmse = True
     
     # Set the optimizer
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    # Freeze layers accordingly to trainable_layers argument (see definition)
-    if trainable_layers is not None:
-        freeze_network(model, n_layer=trainable_layers)
+    # todo: rendere opzioni scheduler tramite parser
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
+    #                                                        factor=0.1, patience=3, 
+    #                                                        threshold=0.001, 
+    #                                                        threshold_mode='abs')
 
     # Create a directory inside exp_path to save model checkpoints
     checkpoints_dir = os.path.join(exp_dir, 'checkpoints')
-    if not os.path.isdir(checkpoints_dir):
-        os.mkdir(checkpoints_dir)
+    os.makedirs(checkpoints_dir, exist_ok=True)
 
-    # # Compute starting performances in validation set
-    # results = get_pct_results(new_model=model, ds_loader=val_loader, 
-    #                         old_model=old_model, device=device)
-    # # Compute acc of old model
-    # # initialize the best acc and best nfr of the current model as the starting ones
-    # old_acc, best_acc, best_nfr = results['old_acc'], results['new_acc'], results['nfr']
+    ut.set_all_seed(random_seed)
+    # TODO: cosa ci faceva questo?
+    # val_loader = DataLoader(val_loader.dataset, batch_size=train_loader.batch_size, shuffle=False)
+    
+    # best_val_loss = math.inf
+    # best_epoch = 0
+    # patience_lr = 5
+    # min_lr = 1e-4
+    # patience_early_stopping = 10
+    # margin = 0.005
+    # cnt = 0
+    # running_lr = lr
 
-    set_all_seed(random_seed)
+    eps = ut.EPS[ds_id]
     # Start the training loop...
     for e in range(epochs):
         if not adv_training:
@@ -133,10 +174,68 @@ def train_pct_model(model, old_model,
         else:
             adv_pc_train_epoch(model=model, old_model=old_model, device=device, train_loader=train_loader, 
                     optimizer=optimizer, epoch=e, loss_fn=loss_fn, new_model=new_model, mixmse=mixmse,
-                    eps=0.03, n_steps=50, logger=logger)
+                    eps=eps, logger=logger)
             
+        model_data = {
+            'epoch': e,
+            'model_state_dict': model.cpu().state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': loss_fn
+            }
+    
+    torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
+    #     # Evaluate loss on validation set
+    #     logger.info('Checking loss on validation set...')
+    #     full_val_loss = 0
+    #     for i, (data, target) in enumerate(val_loader):
+    #         data, target = data.to(device), target.to(device)
+    #         if adv_training:
+    #             data = fgsm_attack(x=data, target=target, model=model, epsilon=8/255)
             
-            
+    #         with torch.no_grad():
+    #             out = model(data)
+    #             old_out = old_model(data)
+    #             if mixmse:
+    #                 new_out = new_model(data)
+    #                 val_loss = val_loss_fn(model_output=out, target=target, 
+    #                                     old_output=old_out, new_output=new_out)
+    #             else:
+    #                 val_loss = val_loss_fn(model_output=out, target=target, old_output=old_out)
+    #             full_val_loss += val_loss[0].item() / len(val_loader)
+    #         logger.debug(f"[{i}/{len(val_loader)}] -  / "\
+    #     f"tot:{val_loss[0]:.3f}, ce:{val_loss[1]:.3f}, dist: {val_loss[2]:.3f}, foc: {val_loss[3]:.3f}, ")
+
+    #     # scheduler.step()
+    #     # logger.debug(f"LR = {scheduler.get_last_lr()}")
+    #     if (best_val_loss - full_val_loss <= margin):
+    #         cnt += 1
+    #         logger.debug(f"Increase counter. Loss not significantly improved.")
+    #     else:
+    #         best_val_loss = full_val_loss
+    #         best_epoch = e
+    #         cnt = 0
+    #         model_data = {
+    #             'epoch': e,
+    #             'model_state_dict': model.cpu().state_dict(),
+    #             'optimizer_state_dict': optimizer.state_dict(),
+    #             'loss': loss_fn,
+    #             'val_loss': val_loss_fn
+    #             }
+    #         torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
+    #         logger.debug(f"New checkpoint. Best epoch: {best_epoch}. LR: {running_lr}, Best Val loss: {best_val_loss}")
+        
+
+    #     if cnt >= patience_lr:
+    #         running_lr /= 2
+    #         for g in optimizer.param_groups:
+    #             g['lr'] = running_lr
+    #         logger.debug(f"LR = {running_lr}")
+    #     if cnt >= patience_early_stopping:
+    #         logger.debug(f'Early stopping at epoch {e}')
+    #         break
+    # logger.debug(f"Training completed. Best epoch: {best_epoch}. LR: {running_lr}, Best Val loss: {best_val_loss}")
+        # loss = np.array(loss_fn.loss_path['tot'])[-20:].mean()
+        # scheduler.step(loss)
         # check performance on validation
         # val_results = get_pct_results(new_model=model, ds_loader=val_loader, 
         #                 old_model=old_model, device=device)
@@ -150,12 +249,7 @@ def train_pct_model(model, old_model,
         #     writer.add_scalar('Accuracy/validation', acc, e)
 
         # Compact information to eventually save them
-        model_data = {
-            'epoch': e,
-            'model_state_dict': model.cpu().state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss_fn
-            }
+
 
         # # Save the model when highest accuracy on validation is reached
         # if (acc > best_acc) and (keep_best in ('acc', 'both')):
@@ -172,7 +266,7 @@ def train_pct_model(model, old_model,
         #         pickle.dump(val_results, f)
 
     # Save the model after the last epoch
-    torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
+    # torch.save(model_data, os.path.join(checkpoints_dir, f"last.pt"))
     # with open(os.path.join(exp_dir, 'val_perf_last.gz'), 'wb') as f:
     #     pickle.dump(val_results, f)
 
@@ -249,13 +343,8 @@ def train_pct_pipeline(args):
     |___ ...
     |___ ...
     """
-
     device = torch.device(f"cuda:{args.cuda}" if torch.cuda.is_available()
                 else "cpu")
-
-    # random_seed=args.random_seed
-
-    trainable_layers = None
 
     exp_name = f"{args.exp_name}"    
     date = datetime.now().strftime("day-%d-%m-%Y_hr-%H-%M-%S")
@@ -264,26 +353,29 @@ def train_pct_pipeline(args):
     # exp_name = "prova_DEBUG_ADV"
     # exp_path = os.path.join(root, exp_name)
 
-    if not os.path.isdir(exp_path):
-        os.mkdir(exp_path)
+    os.makedirs(exp_path, exist_ok=True)
 
-    # save_params(locals().items(), exp_path, 'info')
+    ut.save_params(locals().items(), exp_path, 'info')
 
-    logger = init_logger(exp_path, fname=f'progress_{args.exp_name}')
-
-    # writer = SummaryWriter('logs/')
+    logger = ut.init_logger(exp_path, fname=f'progress_{args.exp_name}-cuda_{args.cuda}', level=logging.DEBUG)
 
     #####################################
     # PREPARE DATA
     #####################################
-    train_dataset, val_dataset = split_train_valid(
-        get_cifar10_dataset(train=True, shuffle=False, num_samples=args.n_tr), train_size=0.8)
-    test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=args.n_ts)
+    ut.set_all_seed(args.random_seed)
+    if not args.imagenet:
+        train_dataset, val_dataset = split_train_valid(
+            get_cifar10_dataset(train=True, shuffle=True, num_samples=args.n_tr, 
+                                random_seed=args.random_seed), train_size=0.8)
+        test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=args.n_ts)
+    else:
+        train_dataset, val_dataset, test_dataset = get_imagenet_dataset(normalize=False)
     # shuffle can be set to True if reference models are evaluated on the fly
     # without exploiting precomputed outputs
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    ds_id = ut.cifar10_id if not args.imagenet else ut.imagenet_id
 
     #############################
     # MODEL PAIR LEVEL
@@ -293,14 +385,12 @@ def train_pct_pipeline(args):
         logger.info(f"------- MODELS: {old_model_id} -> {model_id} -------") 
         model_pair_dir = f"old-{old_model_id}_new-{model_id}"
         model_pair_path = os.path.join(exp_path, model_pair_dir)
-
-        if not os.path.isdir(model_pair_path):
-            os.mkdir(model_pair_path)
+        os.makedirs(model_pair_path, exist_ok=True)
 
         # The architecture of the old model will be the same, I load it here
-        old_model = load_model(MODEL_NAMES[old_model_id], dataset='cifar10', threat_model='Linf') 
+        old_model = load_model(ut.MODEL_NAMES[ds_id][old_model_id], dataset=ds_id, threat_model='Linf') 
         
-        model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+        model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf')
         # Starting test set performances
         logger.debug('Get baseline results')
         
@@ -342,14 +432,14 @@ def train_pct_pipeline(args):
                         #####################################
                         # TRAIN POSITIVE CONGRUENT
                         #####################################
-                        model = load_model(MODEL_NAMES[model_id], dataset='cifar10', threat_model='Linf')
+                        model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf')
                         
                         if not args.test_only:
                             logger.debug('Start training...')
                             train_pct_model(model=model, old_model=old_model,
                                             train_loader=train_loader, val_loader=val_loader,
                                             epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
-                                            alpha=alpha, beta=beta, trainable_layers=trainable_layers,
+                                            alpha=alpha, beta=beta, ds_id=ds_id,
                                             adv_training=adv_at_sel,#args.adv_tr,
                                             logger=logger, exp_dir=params_dir_path)#, writer=writer)
 
@@ -391,13 +481,14 @@ def train_pct_pipeline(args):
                             #####################################
                             # SAVE CLEAN RESULTS
                             #####################################
-                            logger.debug(f'Evaluating {ds_name} set ...')
+                            logger.info(f'Evaluating {ds_name} set ...')
                             
-                            set_all_seed(args.random_seed)
+                            ut.set_all_seed(args.random_seed)
                             clean_results = get_pct_results(new_model=model, ds_loader=ds_loader, 
                                                         old_correct=base_results[ds_name]['old_correct'],
                                                         device=device)
                             clean_results['loss'] = checkpoint['loss'].loss_path
+                            clean_results['val_loss'] = checkpoint['val_loss'].loss_path
                             clean_results['orig_acc'] = base_results[ds_name]['new_acc']
                             clean_results['orig_nfr'] = base_results[ds_name]['nfr']
                             clean_results['orig_pfr'] = base_results[ds_name]['pfr']
@@ -422,7 +513,7 @@ def train_pct_pipeline(args):
                                 logger.debug(f'Generating advx on {ds_name} set ...')
                                 adv_dir_path = os.path.join(params_dir_path, 'advx', 'ts')
 
-                                set_all_seed(args.random_seed)
+                                ut.set_all_seed(args.random_seed)
                                 generate_advx(model=model, ds_loader=ds_loader, n_steps=args.n_steps, 
                                             adv_dir_path=adv_dir_path,
                                             logger=logger, device=device,
@@ -436,7 +527,7 @@ def train_pct_pipeline(args):
                                 # uso le predizioni già salvate e le confronto con la baseline (da calcolare a parte con generate_baseline_advx)
                                 
                                 # Get results of model M wrt M0 and M1
-                                set_all_seed(args.random_seed)
+                                ut.set_all_seed(args.random_seed)
                                 adv_results = get_pct_results(new_model=model, ds_loader=adv_ds_loader, 
                                                             old_correct=old_correct_adv,
                                                             device=device)
@@ -448,7 +539,7 @@ def train_pct_pipeline(args):
                                 with open(adv_results_fname, 'wb') as f:
                                     pickle.dump(adv_results, f)
                                 
-                                # delete_advx_ts(params_dir_path)
+                                delete_advx_ts(params_dir_path)
                                 advx_check = True
 
                             except Exception as e:
@@ -473,6 +564,10 @@ def train_pct_pipeline(args):
                                 fig, ax = plt.subplots(1, 1, figsize=(5, 5))
                                 plot_loss(results['clean']['loss'], ax)
                                 fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
+                            else:
+                                fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+                                plot_loss(results['clean']['val_loss'], ax)
+                                fig.savefig(os.path.join(params_dir_path, "val_loss_path.pdf")) 
                             
                             logger.info(f">>> Clean Results")
                             logger.info(f"Old Acc: {results['clean']['old_acc']}")
@@ -482,7 +577,7 @@ def train_pct_pipeline(args):
                             logger.info(f"Old Acc: {results['advx']['old_acc']}")
                             logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
                             logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
-                        
+                            logger.info("")
                             with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
                                 f.write(f">>> Clean Results\n")
                                 f.write(f"Old Acc: {results['clean']['old_acc']}\n")
@@ -494,6 +589,7 @@ def train_pct_pipeline(args):
                                 f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
                         else:
                             logger.debug(f"Clean check: {clean_check}, Advx check: {advx_check}, Results cannot be saved jointly.")
+                    logger.info("")
                 except Exception as e:
                     logger.debug("Something went wrong ...")
                     logger.debug(e)
@@ -529,31 +625,33 @@ if __name__ == '__main__':
 
     parser.add_argument('-exp_name', default='DEBUG', type=str)
     parser.add_argument('-root', default='results', type=str)
-    parser.add_argument('-adv_tr', action='store_true')
 
-    parser.add_argument('-n_tr', default=50, type=int)   
-    parser.add_argument('-n_ts', default=50, type=int) 
+    parser.add_argument('-n_tr', default=100, type=int)   
+    parser.add_argument('-n_ts', default=100, type=int) 
 
-    parser.add_argument('-epochs', default=1, type=int)  
+    parser.add_argument('-epochs', default=2, type=int)  
     parser.add_argument('-lr', default=1e-3, type=float)
-    parser.add_argument('-batch_size', default=50, type=int)   
+    parser.add_argument('-batch_size', default=128, type=int)   
     
     parser.add_argument('-n_steps', default=50, type=int)   
     parser.add_argument('-n_adv_ts', default=50, type=int) 
     
-    parser.add_argument('-old_model_ids', default=[2], type=int, nargs='+')
-    parser.add_argument('-model_ids', default=[5], type=int, nargs='+')
-    parser.add_argument('-loss_names', default=['PCT-AT', 'MixMSE-AT'], type=str, nargs='+')
-    parser.add_argument('-alphas_mix', default=[0.3, 0.5], type=float, nargs='+')
-    parser.add_argument('-betas_mix', default=[0.6, 0.4], type=float, nargs='+')
-    parser.add_argument('-alphas_pct', default=[1, 1], type=int, nargs='+')
-    parser.add_argument('-betas_pct', default=[1, 5], type=int, nargs='+')
+    parser.add_argument('-old_model_ids', default=[0], type=int, nargs='+')
+    parser.add_argument('-model_ids', default=[1], type=int, nargs='+')
+    parser.add_argument('-loss_names', default=['MixMSE-AT'], type=str, nargs='+')
+    parser.add_argument('-alphas_mix', default=[0.5], type=float, nargs='+')
+    parser.add_argument('-betas_mix', default=[0.4], type=float, nargs='+')
+    parser.add_argument('-alphas_pct', default=[1], type=float, nargs='+')
+    parser.add_argument('-betas_pct', default=[2], type=float, nargs='+')
+
     
     parser.add_argument('-date', action='store_true')
     parser.add_argument('-test_only', action='store_true')
+
+    parser.add_argument('-imagenet', action='store_true')
     
     parser.add_argument('-random_seed', default=0, type=int)
-    parser.add_argument('-cuda', default=0, type=int)
+    parser.add_argument('-cuda', default=1, type=int)
     
     
     args = parser.parse_args()
