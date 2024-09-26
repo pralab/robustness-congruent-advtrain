@@ -3,7 +3,7 @@ import numpy as np
 import random
 import argparse
 import logging
-from secml.utils import fm
+# from secml.utils import fm
 
 from typing import Tuple, Optional
 import torch.utils.data as data
@@ -14,6 +14,7 @@ import pandas as pd
 
 import pickle
 import json
+import os
 
 # ordinati dalla leaderboard su github (a fine pagina)
 
@@ -27,8 +28,29 @@ import json
 # 'Carmon2019Unlabeled',
 # ]
 
+cifar10_id = 'cifar10'
+imagenet_id = 'imagenet'
+
+EPS = {}
+EPS[cifar10_id] = 8/255
+EPS[imagenet_id] = 4/255
+
+N_MAX_ADVX = {}
+N_MAX_ADVX[cifar10_id] = 2000
+N_MAX_ADVX[imagenet_id] = 5000
+
+
+MODEL_NAMES = {}
+MODEL_NAMES_SHORT = {}
+MODEL_NAMES_LONG_SHORT_DICT = {}
+
+
+#####################################################################
+# CIFAR-10
+#####################################################################
 # Usati per finetuning e AT dove robustness non era strettamente crescente
-MODEL_NAMES = ['Standard',
+MODEL_NAMES[cifar10_id] = [
+'Standard',
 'Engstrom2019Robustness',
 'Rice2020Overfitting',
 'Zhang2020Attacks',
@@ -41,8 +63,7 @@ MODEL_NAMES = ['Standard',
 'Gowal2021Improving_70_16_ddpm_100m'
 ]
 
-
-MODEL_NAMES_SHORT = ['Std.',
+MODEL_NAMES_SHORT[cifar10_id] = ['Std.',
 'Engstrom',
 'Rice',
 'Zhang',
@@ -55,8 +76,21 @@ MODEL_NAMES_SHORT = ['Std.',
 'Gowal2021'
 ]
 
-MODEL_NAMES_LONG_SHORT_DICT = {k: v for k, v in zip(MODEL_NAMES,
-                                                    MODEL_NAMES_SHORT)}
+
+MODEL_NAMES_LONG_SHORT_DICT[cifar10_id] = {k: v for k, v in zip(MODEL_NAMES[cifar10_id],
+                                                    MODEL_NAMES_SHORT[cifar10_id])}
+
+#####################################################################
+# IMAGENET
+#####################################################################
+
+MODEL_NAMES[imagenet_id] = [
+'Salman2020Do_R18',                 # 52.95 / 25.32 (R18)
+'Engstrom2019Robustness',           # 62.56 / 29.22 (R50)
+'Chen2024Data_WRN_50_2',            # 68.76 / 40.60 (WR50-2)
+'Liu2023Comprehensive_ConvNeXt-B',  # 76.02 / 55.82 (ConvNeXt-B)
+'Liu2023Comprehensive_Swin-L',      # 78.92 / 59.56 (Swin-L)
+]
 
 # MODEL_NAMES = ['Standard', #81
 # 'Engstrom2019Robustness', #53
@@ -108,13 +142,14 @@ NFLIPS_FNAME = 'neg_flips_table.csv'
 OVERALL_RES_FNAME = 'overall_results_table.csv'
 
 ADVX_DIRNAME_DEFAULT = 'advx'
+ADVX_IMAGENET_DIRNAME_DEFAULT = 'advx-imagenet'
 custom_dirname = lambda dirname, ft_models=False, tr_set=False: f"{dirname}{'_ft' if ft_models else ''}{'_trset' if tr_set else ''}"
 PREDS_DIRNAME_DEFAULT = 'predictions'
 RESULTS_DIRNAME_DEFAULT = 'results'
 FINETUNING_DIRNAME_DEFAULT = 'finetuned_models'
 FT_DEBUG_FOLDER_DEFAULT = 'ft_debug'
 
-COLUMN_NAMES = ['True', 'Clean'] + MODEL_NAMES
+COLUMN_NAMES = lambda model_names=MODEL_NAMES: ['True', 'Clean'] + model_names
 
 
 def select_group(old_ids, new_ids, group_id=None):
@@ -178,7 +213,7 @@ def model_pairs_str_to_ids(model_pair_str):
     return old_id, new_id
 
 def join(*args):
-    path = fm.join(*args).replace('\\', '/')
+    path = os.path.join(*args).replace('\\', '/')
     return path
 
 def set_all_seed(seed):
@@ -240,11 +275,11 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def init_logger(root, fname='progress'):
+def init_logger(root, fname='progress', level=logging.DEBUG):
     logger = logging.getLogger(fname)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
 
-    fh = logging.FileHandler(fm.join(root, f'{fname}.log'))
+    fh = logging.FileHandler(join(root, f'{fname}.log'))
     # formatter_file = logging.Formatter('%(asctime)s - %(message)s')
     formatter = logging.Formatter('[%(asctime)s] %(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
                                   '%m-%d %H:%M:%S')
@@ -261,7 +296,7 @@ def save_params(local_items, dirname, fname):
     for k, v in local_items:
         s += f"{k}: {v}\n"
 
-    with open(fm.join(dirname, f"{fname}.txt"), 'w') as f:
+    with open(join(dirname, f"{fname}.txt"), 'w') as f:
         f.write(s)
 
 
