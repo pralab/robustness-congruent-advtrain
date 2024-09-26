@@ -398,14 +398,14 @@ def fill_quadrants(ax, xlim=(), ylim=()):
                          )
 
 
-def create_legend(ax, figsize=(10, 0.5)):
+def create_legend(ax, figsize=(10, 0.5), ncol=None):
     # create legend
     h, l = ax.get_legend_handles_labels()
     legend_dict = dict(zip(l, h))
     legend_fig = plt.figure(figsize=figsize)
 
     legend_fig.legend(legend_dict.values(), legend_dict.keys(), loc='center',
-                      ncol=len(legend_dict.values()), frameon=False)
+                      ncol=len(legend_dict.values()) if ncol is None else ncol, frameon=False)
     legend_fig.tight_layout()
 
     return legend_fig

@@ -17,6 +17,8 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
 
+COLS_ORDER = ['\\cleanacc', '\\anfr', '\\robustacc', '\\rnfr']
+
 def hparams_selector(df, criteria, model_ids, select_hparams, ascending=True):
     assert criteria in ['Acc', 'RobAcc', 'NFR', 'R-NFR', 'B-NFR', 'S-NFR']
     df = df.sort_values(by=criteria, ascending=ascending).drop_duplicates(['Loss']).sort_index()
@@ -175,21 +177,26 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
         
     
 
-def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models_results'):
+def latex_table(df, diff=False, errors=False, perc=False, dir_out='latex_files', fname='models_results'):
     df.drop(['Hparams'], axis=1, inplace=True)
     old_cols = df.columns.to_list()
-    new_cols = ['\\cleanacc', '\\robustacc', '\\anfr', '\\rnfr', '\\bnfr', '\\snfr']
+    new_cols = ['\\cleanacc', '\\robustacc', '\\anfr', '\\rnfr', '\\dnfr', '\\snfr']
     cols_dict = {k: v for k, v in zip(old_cols, new_cols)}
     df = df.rename(columns=cols_dict)
     model_pairs = np.unique(np.array(list(zip(*df.index))[0])).tolist()
 
+    if errors:
+        df[['\\cleanacc', '\\robustacc']] = 100 - df[['\\cleanacc', '\\robustacc']]
     idxs_best_list = []
     idxs_list = []
     idxs_at_list = []
     for model_pair in model_pairs:
         df_m = df.loc[model_pair]
-        idxs = df_m.iloc[1:].idxmax()
-        idxs.iloc[2:] = df_m.iloc[1:, 2:].idxmin()
+        if errors:
+            idxs = df_m.idxmin()
+        else:
+            idxs = df_m.iloc[1:].idxmax()
+            idxs.iloc[2:] = df_m.iloc[1:, 2:].idxmin()
         idxs_best_list.append(idxs)
         for i in range(2):
             sel_loss = [2+i, 4+i, 6+i][:(df_m.index.shape[0] - 2)//2]
@@ -197,23 +204,37 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
                 df_m.iloc[sel_loss, :] = df_m.iloc[sel_loss, :] - df_m.iloc[1, :]
             if perc:
                 df_m.iloc[sel_loss, :] = (df_m.iloc[sel_loss, :] / df_m.iloc[1, :]).fillna(0)
-            idxs = df_m.iloc[sel_loss].idxmax()
-            idxs.iloc[2:] = df_m.iloc[sel_loss, 2:].idxmin()
+            if errors:
+                df_m.iloc[sel_loss].idxmin()
+            else:
+                idxs = df_m.iloc[sel_loss].idxmax()
+                idxs.iloc[2:] = df_m.iloc[sel_loss, 2:].idxmin()
             if i == 0:
                 idxs_list.append(idxs)
             else:
                 idxs_at_list.append(idxs)
 
+    # # Creating small table difference of mean performances
+    # df_mean_diff = df
+    # df_mean_diff.rename(dict_loss_names, inplace=True)
+    # df_mean_diff = df_mean_diff.groupby(level=1, sort=False).mean()
+    # df_mean_diff = df_mean_diff - df_mean_diff.loc['new']
+    # df_mean_diff.drop(['old', 'new'], inplace=True)
+    # df_mean_diff = df_mean_diff[COLS_ORDER]
+    # df_mean_diff.rename(columns={'\\cleanacc': '\\cleanerr', '\\robustacc': '\\robusterr'}, inplace=True)
+    # print(df_mean_diff)
+
     df = df.applymap(lambda x: f"{x:.2f}" if not math.isnan(x) else "-")
 
-    keys = np.unique(list(zip(*df.index.to_list()))[0])
-    keys = [key.replace('old-', 'M').replace('_new-', '-M') for key in keys]
 
-    for model_pair, idxs, idxs_at, idxs_best, key in zip(model_pairs,
-                                                         idxs_list,
-                                                         idxs_at_list,
-                                                         idxs_best_list,
-                                                         keys):
+    keys = np.unique(list(zip(*df.index.to_list()))[0])
+    keys = [key.replace('old-', '($M_').replace('_new-', ', M_') + '$)' for key in keys]
+
+    for model_i, (model_pair, idxs, idxs_at, idxs_best, key) in enumerate(zip(model_pairs,
+                                                                              idxs_list,
+                                                                              idxs_at_list,
+                                                                              idxs_best_list,
+                                                                              keys)):
 
         df_m = df.loc[model_pair]
         for col in df_m.columns:
@@ -224,14 +245,19 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
                 # value = df_m.loc[idxs_at.loc[col]][col]
                 # df_m.loc[idxs_at.loc[col]][col] = r"\textcolor{red}{" + value + r"}"
 
-                value = df.loc[model_pair].loc[idxs_best.loc[col]][col]
-                df.loc[model_pair].loc[idxs_best.loc[col]][col] = r"\textbf{" + value + r"}"
+                if col != r'\dnfr':
+                    value = df.loc[model_pair, idxs_best.loc[col]][col]
+                    df.loc[model_pair, idxs_best.loc[col]][col] = r"\textbf{" + value + r"}"
+
+                print(model_pair)
             except:
                 print("")
 
         new_index_name = key
-        # new_index_name =r"\rotatebox[origin=t]{90}{" + new_index_name + r"}"
-        new_index_name = r"\hline \multirow{6}{*}{" + new_index_name + "}"
+
+        new_index_name =r"\rotatebox[origin=c]{90}{" + new_index_name + r"}"
+        new_index_name = r"\hline \multirow{5}{*}{" + new_index_name + "}"
+        new_index_name = r"\multirow{5}{*}{\rotatebox[origin=c]{90}{(" + str(model_i + 1) + ")}}" + " " + new_index_name
         # new_index_name = r"\hline \multirow{6}{*}{" + dict_loss_names[new_index_name] + "}"
         # new_index_name = model_pair
         df = df.rename(index={model_pair: new_index_name})
@@ -239,14 +265,26 @@ def latex_table(df, diff=False, perc=False, dir_out='latex_files', fname='models
     # df.rename(index={k:v in })
     # df = df.transpose()
 
+    # Rearrange columns
+    df = df[COLS_ORDER]
+    df = df.rename(columns={'\\cleanacc': '\\cleanerr', '\\robustacc': '\\robusterr'})
+
     df_str = df.to_latex(
-            caption="Models results", label="tab:ft_results",
-            column_format="l|l|c c|c c c|c|", escape=False
-        )
+        caption=r"Test performance comparison between \pct, \pctat and \mixmseat for the selected model pairs $(M_i, M_j)$.",
+        label="tab:ft_results",
+        column_format="l l c c c c c", escape=False
+    )
     df_str = df_str.replace(r'\begin{tabular}', r'\resizebox{0.99\linewidth}{!}{\begin{tabular}')
     df_str = df_str.replace(r'\end{tabular}', r'\hline \end{tabular}}')
-    
-    for k,v in dict_loss_names.items():
+    # todo: accrocchioni
+    df_str = df_str.replace(r"\hline \multirow{5}{*}{\rotatebox[origin=c]{90}{($M_",
+                            "\n" + r"\multirow{5}{*}{\rotatebox[origin=c]{90}{($M_")
+    df_str = df_str.replace("\multirow{5}{*}", '\hline \multirow{5}{*}')
+    df_str = df_str.replace(r'\hline \multirow{5}{*}{\rotatebox[origin=c]{90}{($M_',
+                            r'\multirow{5}{*}{\rotatebox[origin=c]{90}{($M_')
+    df_str = df_str.replace('\midrule', '')
+    df_str = df_str.replace('Loss', '')
+    for k, v in dict_loss_names.items():
         df_str = df_str.replace(k, v)
     
     eof = ""
@@ -274,15 +312,53 @@ def main_create_table():
     create_table(path=path, old_model_ids=old_model_ids, model_ids=model_ids,
                  loss_names=loss_names, criteria=criteria, ascending=ascending)
 
+
 def main_latex_table():
     root_path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
     csv_fname = 'model_results_test_with_val_criteria-S-NFR.csv'
     dir_out = 'latex_files'
-    fname = 'models_results_test_snfr.tex'
+    fname = 'models_results_test_snfr'
+    errors = True
+
+    # df = pd.read_csv(join(root_path, csv_fname), index_col=[0, 1], skipinitialspace=True)
+    # new_indexes = df.index.get_level_values(0).unique()[np.array([3, 12, 1, 4, 7, 6, 11, 5, 14, 2]) - 1]
+    # df = df.reindex(new_indexes, level=0)
+    #
+    # # Creating small table difference of mean performances
+    # df_mean_diff = df
+    # df_mean_diff.rename(dict_loss_names, inplace=True)
+    # df_mean_diff.drop(columns=['Hparams'], inplace=True)
+    # old_cols = df_mean_diff.columns.to_list()
+    # new_cols = ['\\cleanacc', '\\robustacc', '\\anfr', '\\rnfr', '\\dnfr', '\\snfr']
+    # cols_dict = {k: v for k, v in zip(old_cols, new_cols)}
+    # df_mean_diff = df_mean_diff.rename(columns=cols_dict)
+    # df_mean_diff = df_mean_diff.groupby(level=1, sort=False).mean()
+    #
+    # # Do per scontato che prendo sempre errors = True qui
+    # df_mean_diff[['\\cleanacc', '\\robustacc']] = 100 - df_mean_diff[['\\cleanacc', '\\robustacc']]
+    # df_mean_diff = df_mean_diff - df_mean_diff.loc['new']
+    # df_mean_diff.drop(['old', 'new'], inplace=True)
+    # df_mean_diff.drop(columns=['\\dnfr'], inplace=True)
+    # # Here I change sign
+    # df_mean_diff = - df_mean_diff[['\\cleanacc', '\\anfr', '\\robustacc', '\\rnfr']]
+    # df_mean_diff.rename(columns={'\\cleanacc': '\\cleanerr', '\\robustacc': '\\robusterr'}, inplace=True)
+    # df_mean_diff = df_mean_diff.applymap(lambda x: f"{x:.2f}")
+    #
+    # print(df_mean_diff)
+    # df_mean_diff = df_mean_diff.to_latex(
+    #     caption=r"Average error and regression reduction with respect to model new among the considered model pairs.",
+    #     label="tab:mean_diff",
+    #     column_format="l c c c c c", escape=False
+    # )
+    # with open(join(dir_out, f'mean_diff.tex'), 'w') as f:
+    #     f.write(df_mean_diff)
+
     df = pd.read_csv(join(root_path, csv_fname), index_col=[0, 1], skipinitialspace=True)
+    new_indexes = df.index.get_level_values(0).unique()[np.array([3, 12, 1, 4, 7, 6, 11, 5, 14, 2]) - 1]
+    df = df.reindex(new_indexes, level=0)
+    latex_table(df=df, errors=errors, dir_out=dir_out, fname=fname)
 
-
-    latex_table(df=df, dir_out=dir_out, fname=fname)
+    print("")
     
 
 if __name__ == '__main__':

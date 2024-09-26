@@ -201,7 +201,7 @@ class MixedPCTLoss(BasePCTLoss):
         # loss_distill = torch.mean(D_dist)
         loss_distill = torch.sum(new_correct * D_dist) / new_correct.sum()
 
-        # ... while mimicking the reference model in the Negative Flips regions
+        # ... while mimicking the reference model where it gets right
         D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
         # loss_focal = torch.mean(old_correct * D_focal)
         loss_focal = torch.sum(old_correct * D_focal) / old_correct.sum()

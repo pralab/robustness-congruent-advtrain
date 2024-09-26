@@ -12,39 +12,46 @@ from utils.visualization import create_legend, fill_quadrants, \
 import matplotlib as mpl
 from matplotlib.patches import Rectangle
 from matplotlib.ticker import FormatStrFormatter
+from matplotlib.lines import Line2D
+import matplotlib.transforms as mtransforms
 
 
-# mpl.rcParams['mathtext.fontset'] = 'stix'
-# mpl.rcParams['font.size'] = 20
-# mpl.rcParams['font.family'] = 'STIXGeneral'
-# mpl.rcParams['pdf.fonttype'] = 42
-# mpl.rcParams['ps.fonttype'] = 42
-# mpl.rcParams['mathtext.fontset'] = 'stix'
-# # mpl.rcParams['text.usetex'] = True
+mpl.rcParams['mathtext.fontset'] = 'stix'
+mpl.rcParams['font.size'] = 20
+mpl.rcParams['font.family'] = 'STIXGeneral'
+mpl.rcParams['pdf.fonttype'] = 42
+mpl.rcParams['ps.fonttype'] = 42
+mpl.rcParams['mathtext.fontset'] = 'stix'
+# mpl.rcParams['text.usetex'] = True
 
-mpl.rcParams.update(mpl.rcParamsDefault)
-import scienceplots
-plt.style.use('science')
+# mpl.rcParams.update(mpl.rcParamsDefault)
+# import scienceplots
+# plt.style.use('science')
 # plt.style.use(['science','ieee'])
-
-mpl.rcParams['font.size'] = 15
 
 metric_to_id_dict = {'acc': 0, 'robacc': 1,
                      'anfr': 2, 'rnfr': 3,
-                     'bnfr': 4, 'snfr': 5}
+                     'bnfr': 4, 'snfr': 5,
+                     'custom': 6,
+                     'cleanerr': 7, 'roberr': 8}
 
 METRIC_TITLES = ['Clean Accuracy', 'Robust Accuracy',
-                 'ANFR', 'RNFR',
-                 'BNFR', 'SNFR']
+                 'NFs', 'RNFs',
+                 'BNFR', 'SNFR', 'CUSTOM', 'Test Error', 'Robust Error']
 
 # METRIC_TITLES = ['C', 'R',
 #                  'ANFR', 'RNFR',
 #                  'BNFR', 'SNFR']
-METRIC_TITLES = [metric_title + ' (\%)' for metric_title in METRIC_TITLES]
+# TODO: qui usare \% serve solo con scienceplot ma senza quello non formatta
+# METRIC_TITLES = [metric_title + ' (\%)' for metric_title in METRIC_TITLES]
+METRIC_TITLES = [metric_title + ' (%)' for metric_title in METRIC_TITLES]
 
-LOSS_NAMES = ['baseline', 'PCT', 'PCT-AT', 'RF-AT (Ours)']
-COLORS = ['grey', 'red', 'blue', 'green']
+LOSS_NAMES = [r'$f_{\rm new}$', 'PCT', 'PCAT', 'RCAT (Ours)']
+COLORS = ['tab:grey', 'tab:red', 'tab:blue', 'tab:green']
 MARKERS = ['o', 'v', '^', 'D']
+# ALL_MARKERS = list(Line2D.markers.keys())
+ALL_MARKERS = "ov^<>1234sP*XD"
+
 
 def scatter_ft_results(ax, res_list,
                        x_metric,
@@ -66,6 +73,11 @@ def scatter_ft_results(ax, res_list,
     """
     xmin, xmax = math.inf, 0
     ymin, ymax = math.inf, 0
+
+    # ax.scatter(0, 0, marker=MARKERS[0],
+    #            color=COLORS[0], s=120,
+    #            edgecolor='black',
+    #            label=LOSS_NAMES[0])
 
     res_new = res_list[0]
     for loss_id in loss_ids:
@@ -91,11 +103,32 @@ def scatter_ft_results(ax, res_list,
                 continue
             res_x -= res_new_x
             res_y -= res_new_y
-            plot_axis_lines(ax)
+            if 'nfr' or 'err' in x_metric:
+                res_x = -res_x
+            if 'nfr' or 'err' in y_metric:
+                res_y = -res_y
 
+            plot_axis_lines(ax, alpha=0.3)
+
+        # # TODO: accrocchio per marker diverso per ogni
+        # for i, (x_i, y_i) in enumerate(zip(res_x, res_y)):
+        #     ax.scatter(x_i, y_i,
+        #                alpha=0.5, marker=ALL_MARKERS[i], s=40,
+        #                color=COLORS[loss_id],
+        #                label=LOSS_NAMES[loss_id])
+        #
+
+        # print(LOSS_NAMES[loss_id])
+        # print(f"x: {x_metric}, y: {y_metric}")
+        # print(res_x.mean(), res_y.mean())
+        # print("")
         ax.scatter(res_x, res_y,
-                   alpha=0.9, marker=MARKERS[loss_id], s=40,
-                   # color=COLORS[loss_id],
+                   alpha=0.4, marker=MARKERS[loss_id], s=80,
+                   color=COLORS[loss_id],
+                   label=LOSS_NAMES[loss_id])
+        ax.scatter(res_x.mean(), res_y.mean(), marker=MARKERS[loss_id],
+                   color=COLORS[loss_id], s=120,
+                   edgecolor='black',
                    label=LOSS_NAMES[loss_id])
 
         # Rescale the plot for improved visualization
@@ -113,6 +146,8 @@ def scatter_ft_results(ax, res_list,
     xmax += x_margin
     ymin -= y_margin
     ymax += y_margin
+    ax.set_xscale('symlog', base=10)
+    ax.set_yscale('symlog', base=10)
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
@@ -222,24 +257,36 @@ def scatter_all(path, csv_fname,
                 loss_ids=(0, 1, 2, 3),
                 fig_fname='clusters',
                 diff=False,
-                color_quadrants=False):
+                color_quadrants=False,
+                zoom=False):
 
-    nrows, ncols = 1, 3
+    nrows, ncols = 1, 3 if zoom else 2
 
-    df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
+    # todo: accrocchio
+    # df = pd.read_csv(join(path, csv_fname)).rename(columns={'Unnamed: 0': 'Models'})
+    df = pd.read_csv(join(path, csv_fname), index_col=[0, 1], skipinitialspace=True)
+    new_indexes = df.index.get_level_values(0).unique()[np.array([3, 12, 1, 4, 7, 6, 11, 5, 14, 2]) - 1]
+    df = df.reindex(new_indexes, level=0)
+    df = df.reset_index()
+
+    # TODO: qui aggiungo altre metriche custom basate su combinazione delle altre
+    df['mean'] = df[['NFR', 'R-NFR']].mean(axis=1)
+    df['cleanerr'] = 100 - df['Acc']
+    df['roberr'] = 100 - df['RobAcc']
 
     # model_pairs = df['Models'].unique()
     # old_models = [mp.split('old-')[-1].split('_new-')[0] for mp in model_pairs]
     # new_models = [mp.split('old-')[-1].split('_new-')[0] for mp in model_pairs]
 
-    res_new = df.loc[df['Loss'] == 'new'].iloc[:, 2:].to_numpy()
-    res_pct = df.loc[df['Loss'] == 'PCT'].iloc[:, 2:].to_numpy()
-    res_pctat = df.loc[df['Loss'] == 'PCT-AT'].iloc[:, 2:].to_numpy()
-    res_rfat = df.loc[df['Loss'] == 'MixMSE-AT'].iloc[:, 2:].to_numpy()
+    # TODO: qui bisogna dirgli esattamente quali colonne prendere, perchè se aggiungo altra roba si rompe il codice
+    res_new = df.loc[df['Loss'] == 'new'].iloc[:, 3:].to_numpy()
+    res_pct = df.loc[df['Loss'] == 'PCT'].iloc[:, 3:].to_numpy()
+    res_pctat = df.loc[df['Loss'] == 'PCT-AT'].iloc[:, 3:].to_numpy()
+    res_rfat = df.loc[df['Loss'] == 'MixMSE-AT'].iloc[:, 3:].to_numpy()
 
     res_list = [res_new, res_pct, res_pctat, res_rfat]
 
-    fig, axs = plt.subplots(nrows, ncols, squeeze=False, figsize=(5 * ncols, 5 * nrows))
+    fig, axs = plt.subplots(nrows, ncols, squeeze=False, figsize=(10 * ncols, 5 * nrows))
 
     for col_j, (x_metric, y_metric) in enumerate([(mx1, my1), (mx2, my2)]):
 
@@ -256,6 +303,37 @@ def scatter_all(path, csv_fname,
         axs[0, col_j].set_xlabel(xlabel)
         axs[0, col_j].set_ylabel(ylabel)
 
+    if color_quadrants:
+        # for ax in [axs[0, 0], axs[0, 1], axins]:
+            # xmin, xmax = ax.get_xlim()
+            # ymin, ymax = ax.get_ylim()
+            # major_ticks = np.arange(math.floor(xmin) - 1, math.ceil(xmax) + 1, 10)
+            # minor_ticks = np.arange(math.floor(ymin) - 1, math.ceil(ymax) + 1, 2)
+
+        fill_quadrants(axs[0, 0])
+        fill_quadrants(axs[0, 1])
+
+
+    axs[0, 0].grid('on', linestyle='dashed')
+    axs[0, 1].grid('on', linestyle='dashed')
+
+    ticks = [-50, -20, -10, -5, -2, -1, 0, 1]
+    axs[0, 0].set_xticks(ticks, labels=ticks)
+    axs[0, 0].set_xlim(ticks[0], ticks[-1])
+
+    ticks = [-50, -20, -10, -5, -2, -1, 0, 1, 2]
+    axs[0, 1].set_xticks(ticks, labels=ticks)
+    axs[0, 1].set_xlim(ticks[0], ticks[-1] + 0.5)
+
+    ticks = [0, 1, 2, 5, 10]
+    axs[0, 0].set_yticks(ticks, labels=ticks)
+    axs[0, 0].set_ylim(-0.1, ticks[-1])
+
+    ticks = [0, 1, 2, 5]
+    axs[0, 1].set_yticks(ticks, labels=ticks)
+    axs[0, 1].set_ylim(-0.1, ticks[-1])
+    # set_grid(axs[0, 0], major_delta=5, linestyle_maj='dotted')
+    # set_grid(axs[0, 1], major_delta=5, linestyle_maj='dotted')
 
     # # Inplot interno
     # axs[0, 1].set_xlim(xmax=10)
@@ -268,60 +346,72 @@ def scatter_all(path, csv_fname,
     # axs[0, 1].set_xlim(xmax=10)
     # axs[0, 1].set_ylim(ymin=-80)
 
-    xstart, ystart = .02, .02  # inset axes....
+    if zoom:
+        xstart, ystart = .02, .02  # inset axes....
 
-    xend, yend = 0.6, 0.55
-    xdim = xend - xstart
-    ydim = yend - ystart
+        xend, yend = 0.6, 0.55
+        xdim = xend - xstart
+        ydim = yend - ystart
 
-    # xdim, ydim = 0.5, 0.5
+        # xdim, ydim = 0.5, 0.5
 
 
-    # axins = axs[0, 1].inset_axes([xstart, ystart,
-    #                               xdim, ydim])
+        # axins = axs[0, 1].inset_axes([xstart, ystart,
+        #                               xdim, ydim])
 
-    axins = axs[0, 2]
+        axins = axs[0, 2]
 
-    scatter_ft_results(axins, res_list,
-                       x_metric, y_metric,
-                       loss_ids, lines, diff)
-    # subregion of the original image
-    x1, x2, y1, y2 = -8, 1, -3, 6
-    axins.set_xlim(x1, x2)
-    axins.set_ylim(y1, y2)
-    # axins.xaxis.set_ticks_position('top')
-    # axins.yaxis.set_ticks_position('right')
+        scatter_ft_results(axins, res_list,
+                           x_metric, y_metric,
+                           loss_ids, lines, diff)
+        # subregion of the original image
+        x1, x2, y1, y2 = -8, 1, -3, 6
+        axins.set_xlim(x1, x2)
+        axins.set_ylim(y1, y2)
+        # axins.xaxis.set_ticks_position('top')
+        # axins.yaxis.set_ticks_position('right')
 
-    # axins.tick_params(labelbottom=False, labeltop=False,
-    #                   labelleft=False, labelright=False)
-    # axs[0, 0].tick_params(labelbottom=False, labeltop=True)
-    # axs[0, 1].tick_params(labelbottom=False, labeltop=True)
+        # axins.tick_params(labelbottom=False, labeltop=False,
+        #                   labelleft=False, labelright=False)
+        # axs[0, 0].tick_params(labelbottom=False, labeltop=True)
+        # axs[0, 1].tick_params(labelbottom=False, labeltop=True)
 
-    axs[0, 1].indicate_inset_zoom(axins, edgecolor="black")
+        axs[0, 1].indicate_inset_zoom(axins, edgecolor="black")
 
-    if color_quadrants:
-        # for ax in [axs[0, 0], axs[0, 1], axins]:
-            # xmin, xmax = ax.get_xlim()
-            # ymin, ymax = ax.get_ylim()
-            # major_ticks = np.arange(math.floor(xmin) - 1, math.ceil(xmax) + 1, 10)
-            # minor_ticks = np.arange(math.floor(ymin) - 1, math.ceil(ymax) + 1, 2)
-
-        fill_quadrants(axs[0, 0])
-        fill_quadrants(axs[0, 1])
-        fill_quadrants(axins)
-
-    set_grid(axs[0, 0], major_delta=1, linestyle_maj='dotted')
-    set_grid(axs[0, 1], major_delta=10, minor_delta=1)
-    set_grid(axins, major_delta=1, linestyle_maj='dotted')
+        if color_quadrants:
+            fill_quadrants(axins)
+        set_grid(axins, major_delta=1, linestyle_maj='dotted')
 
     fig.tight_layout()
     fig.show()
 
+    # # Accrocchi per fare legend personalizzata
+    # _, ax = plt.subplots(1,1)
+    # for i, marker in enumerate(ALL_MARKERS):
+    #     ax.scatter(0, 0, marker=marker, color='tab:grey', label=df['Models'].unique()[i])
+    # legend_fig = create_legend(ax=ax, figsize=(15, 1), ncol=7)
+    # # legend_fig = create_legend(ax=axs[0, 0], figsize=(11, 0.5))
+    # legend_fig.tight_layout()
+    # legend_fig.show()
+
+    # _, ax = plt.subplots(1, 1)
+    # for i, loss_color in enumerate(COLORS):
+    #     ax.scatter(0,0, marker='o', color=loss_color, label=LOSS_NAMES[i])
+
+    # legend_fig = create_legend(ax=ax, figsize=(11, 0.5))
     legend_fig = create_legend(ax=axs[0, 0], figsize=(11, 0.5))
     legend_fig.tight_layout()
     legend_fig.show()
 
-    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.pdf")
+    # fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.pdf")
+    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_err.pdf",
+                bbox_inches=mtransforms.Bbox([[0, 0], [0.5, 1]]).transformed(
+                    (fig.transFigure - fig.dpi_scale_trans))
+                )
+    fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_nfr.pdf",
+                bbox_inches=mtransforms.Bbox([[0.5, 0], [1, 1]]).transformed(
+                    (fig.transFigure - fig.dpi_scale_trans))
+                )
     legend_fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}_legend.pdf")
 
     # fig.savefig(f"images/cluster_results/all_{fig_fname}{'_diff' if diff else ''}.png", dpi=300)
@@ -334,17 +424,35 @@ if __name__ == '__main__':
     lines = False
     diff = True
     loss_ids = (0, 1, 2, 3)
-    color_quadrants = True
+    color_quadrants = False
+    zoom = False
 
-    fig_fname = 'inplot_interno_semicolored_q'
+    # mx1, my1 = 'cleanerr', 'anfr',
+    # mx2, my2 = 'roberr', 'rnfr'
+
+    # mx1, my1 = 'acc', 'snfr',
+    # mx2, my2 = 'robacc', 'snfr'
+
+    # mx1, my1 = 'robacc', 'acc'#, 'robacc',
+    # mx2, my2 = 'rnfr', 'anfr'#, 'rnfr'
+
+    # BEST
+    mx1, my1 = 'roberr', 'cleanerr'  # , 'robacc',
+    mx2, my2 = 'rnfr', 'anfr'  # , 'rnfr'
+
+    # mx1, my1 = 'acc', 'custom',
+    # mx2, my2 = 'robacc', 'custom'
+
+    fig_fname = 'scatter_plot_metrics'
 
     scatter_all(path=PATH, csv_fname=CSV_FNAME, lines=lines,
                 loss_ids=loss_ids,
-                mx1='acc', my1='anfr',
-                mx2='robacc', my2='rnfr',
+                mx1=mx1, my1=my1,
+                mx2=mx2, my2=my2,
                 diff=diff,
                 fig_fname=fig_fname,
-                color_quadrants=color_quadrants)
+                color_quadrants=color_quadrants,
+                zoom=zoom)
 
     # scatter_methods(path=PATH, csv_fname=CSV_FNAME, lines=lines,
     #             mx1='acc', my1='anfr',

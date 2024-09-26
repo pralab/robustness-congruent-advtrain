@@ -426,7 +426,9 @@ def train_pct_pipeline(args):
                     #     alpha, beta = int(alpha), int(beta)
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
                     params_dir = f"a-{alpha}_b-{beta}"
-                    params_dir_path = os.path.join(loss_dir_path, params_dir)                 
+                    params_dir_path = os.path.join(loss_dir_path, params_dir)
+
+                    os.makedirs(params_dir_path, exist_ok=True)
 
                     try:
                         #####################################
@@ -623,7 +625,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
 
-    parser.add_argument('-exp_name', default='DEBUG', type=str)
+    parser.add_argument('-exp_name', default='DEBUG_VANILLA', type=str)
     parser.add_argument('-root', default='results', type=str)
 
     parser.add_argument('-n_tr', default=100, type=int)   
@@ -633,8 +635,8 @@ if __name__ == '__main__':
     parser.add_argument('-lr', default=1e-3, type=float)
     parser.add_argument('-batch_size', default=128, type=int)   
     
-    parser.add_argument('-n_steps', default=50, type=int)   
-    parser.add_argument('-n_adv_ts', default=50, type=int) 
+    parser.add_argument('-n_steps', default=10, type=int, help='number of attack steps during robusntess evaluation')
+    parser.add_argument('-n_adv_ts', default=200, type=int, help='number of advx used for robustness evaluation')
     
     parser.add_argument('-old_model_ids', default=[0], type=int, nargs='+')
     parser.add_argument('-model_ids', default=[1], type=int, nargs='+')
