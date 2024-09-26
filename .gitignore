@@ -4,8 +4,10 @@ churnenv
 data
 results
 results2
+results_disperati
 datasets
 images
+nohups
 logs
 code_backup
 __pycache__

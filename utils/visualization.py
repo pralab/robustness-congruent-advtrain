@@ -2,7 +2,7 @@ from torchvision.transforms import Normalize
 from torchvision.utils import make_grid
 import numpy as np
 import matplotlib.pyplot as plt
-from secml.utils import fm
+# from secml.utils import fm
 import os
 import pandas as pd
 import torch

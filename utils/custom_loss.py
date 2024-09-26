@@ -111,6 +111,7 @@ class PCTLoss(BasePCTLoss):
 
         D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
         loss_focal = torch.mean(old_correct * D_focal)
+        # loss_focal = torch.sum(old_correct * D_focal) / old_correct.sum()
 
         # # combine CE loss and PCT loss
         # loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
@@ -197,14 +198,18 @@ class MixedPCTLoss(BasePCTLoss):
         
         # Stay near the initial model before finetuning ...
         D_dist = torch.mean((model_output - new_outs).pow(2), dim=1) / 2
-        loss_distill = torch.mean(D_dist)
+        # loss_distill = torch.mean(D_dist)
+        loss_distill = torch.sum(new_correct * D_dist) / new_correct.sum()
 
         # ... while mimicking the reference model in the Negative Flips regions
         D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
-        loss_focal = torch.mean(old_correct * D_focal)
+        # loss_focal = torch.mean(old_correct * D_focal)
+        loss_focal = torch.sum(old_correct * D_focal) / old_correct.sum()
 
         # # combine CE loss and PCT loss
         loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        # loss = loss_ce + self.alpha * loss_distill + self.beta * loss_focal
+        # loss = (loss_ce + self.alpha * loss_distill + self.beta * loss_focal) / (1 + self.alpha + self.beta)
 
         if self.keep_loss_path:
             self._update_loss_path((loss, loss_ce, loss_distill, loss_focal), self.loss_keys)
