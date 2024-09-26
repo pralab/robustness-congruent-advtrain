@@ -33,7 +33,7 @@ def train_epoch(model, device, train_loader, optimizer, epoch, loss_fn):
             t.update()
     return
 
-def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, logger=None):
+def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, old_model=None, logger=None):
     if logger is None:
         logger = print
         
@@ -45,8 +45,15 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, logge
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
+
+        if old_model is not None:
+            with torch.no_grad():
+                old_output = old_model(data)
+        else:
+            old_output = None
+
         output = model(data)
-        loss = loss_fn(model_output=output, target=target, old_output=None,
+        loss = loss_fn(model_output=output, target=target, old_output=old_output,
                     batch_idx=batch_idx, batch_size=batch_size, curr_batch_dim=data.shape[0])
         loss[0].backward()
         optimizer.step()
@@ -74,7 +81,7 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, logge
 
 def adv_train_epoch(model, device, train_loader,
                     optimizer, epoch, loss_fn,
-                    eps=0.03, n_steps=5):
+                    eps=8/255, n_steps=5):
     """
     Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
     """
@@ -113,7 +120,7 @@ def adv_train_epoch(model, device, train_loader,
 
 def adv_pc_train_epoch(model, old_model, device, train_loader, 
                     optimizer, epoch, loss_fn, new_model=None, mixmse=False,
-                    eps=0.03, n_steps=50, logger=None):
+                    eps=8/255, logger=None):
     """
     Set mixmse=True if using MixMSE loss to also keep a copy of the new model before training
     """
@@ -157,11 +164,27 @@ def adv_pc_train_epoch(model, old_model, device, train_loader,
         loss[0].backward()
         optimizer.step()
 
+        # old_correct = (torch.argmax(adv_old_output, dim=1) == target)
+        # new_correct = (torch.argmax(adv_new_output, dim=1) == target)
+        # correct = (torch.argmax(adv_output, dim=1) == target)
+        # nf_new = get_nflips(old_correct, new_correct) * 100
+        # nf = get_nflips(old_correct, correct) * 100
+        # nf_diff = nf - nf_new
         logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader)} / "\
-        f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}")
+        f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}, ")
+        # logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader)} / "\
+        # f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}, "\
+        # f"NF_new (%): {nf_new:.1f}, "\
+        # f"NF (%): {nf:.3f}, "\
+        # f"NF_diff (%): {nf_diff:.1f}")
     
     return
 
+
+def get_nflips(old_correct, new_correct):
+    _old_correct = old_correct.cpu().numpy() if not isinstance(old_correct, np.ndarray) else old_correct
+    _new_correct = new_correct.cpu().numpy() if not isinstance(new_correct, np.ndarray) else new_correct
+    return np.logical_and(_old_correct, np.logical_not(_new_correct)).mean()
 
 # def adv_pc_train_epoch(model, old_model, device, train_loader, 
 #                     optimizer, epoch, loss_fn, new_model=None, mixmse=False,
@@ -240,17 +263,17 @@ def freeze_network(model, n_layer=1):
 
 # FGSM attack code
 def fgsm_attack(x, target, model, epsilon):
-    x.requires_grad = True
+    # x.requires_grad = True
     model.eval()
-    
-    output = model(x)
+    delta = (torch.rand(x.shape)*2*epsilon - epsilon).to(x.device)
+    delta.requires_grad = True
+    output = model(x + delta)
+    # Qui posso provare anche la loss totale per fare minmax pulito
     loss = CrossEntropyLoss()(output, target.long())
     loss.backward()
-    x_grad = x.grad.data
-    sign_x_grad = x_grad.sign()   # Collect the element-wise sign of the data gradient
-    
-    delta = (torch.rand(x.shape)*2*epsilon - epsilon).to(x.device)
-    delta = delta + 1.25*epsilon*sign_x_grad
+    delta_grad = delta.grad.data
+    sign_delta_grad = delta_grad.sign()   # Collect the element-wise sign of the data gradient
+    delta = delta + 1.25 * sign_delta_grad
     delta = torch.clamp(delta, -epsilon, epsilon)
     # Create the perturbed image by adjusting each pixel of the input image
     x_adv = x + delta
@@ -258,12 +281,38 @@ def fgsm_attack(x, target, model, epsilon):
     x_adv = torch.clamp(x_adv, 0, 1)
     
     model.train()
-    x.requires_grad = False
+    # x.requires_grad = False
     
     # Return the perturbed image
-
     
     return x_adv
+
+# # FGSM attack code
+# def fgsm_attack(x, target, model, epsilon):
+#     x.requires_grad = True
+#     model.eval()
+    
+#     output = model(x)
+#     loss = CrossEntropyLoss()(output, target.long())
+#     loss.backward()
+#     x_grad = x.grad.data
+#     sign_x_grad = x_grad.sign()   # Collect the element-wise sign of the data gradient
+    
+#     delta = (torch.rand(x.shape)*2*epsilon - epsilon).to(x.device)
+#     delta = delta + 1.25*epsilon*sign_x_grad
+#     delta = torch.clamp(delta, -epsilon, epsilon)
+#     # Create the perturbed image by adjusting each pixel of the input image
+#     x_adv = x + delta
+#     # Adding clipping to maintain [0,1] range
+#     x_adv = torch.clamp(x_adv, 0, 1)
+    
+#     model.train()
+#     x.requires_grad = False
+    
+#     # Return the perturbed image
+
+    
+#     return x_adv
 
 
 
