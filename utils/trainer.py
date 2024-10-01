@@ -46,12 +46,11 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, old_m
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
 
+        old_output = None
         if old_model is not None:
             with torch.no_grad():
                 old_output = old_model(data)
-        else:
-            old_output = None
-
+                
         output = model(data)
         loss = loss_fn(model_output=output, target=target, old_output=old_output,
                     batch_idx=batch_idx, batch_size=batch_size, curr_batch_dim=data.shape[0])
@@ -66,7 +65,7 @@ def pc_train_epoch(model, device, train_loader, optimizer, epoch, loss_fn, old_m
         # ce_cumul.append(loss[1].item())
         # pc_cumul.append(loss[2].item())
 
-        logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader.dataset)} / "\
+        logger.debug(f"Epoch: {epoch} / Batch: {batch_idx}/{len(train_loader)} / "\
         f"tot:{loss[0]:.3f}, ce:{loss[1]:.3f}, dist: {loss[2]:.3f}, foc: {loss[3]:.3f}")
         # t.set_postfix(
         #     epoch='{}'.format(epoch),
