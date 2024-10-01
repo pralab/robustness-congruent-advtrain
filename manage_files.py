@@ -75,8 +75,8 @@ def delete_advx_ts(root):
 
     paths = []
     for root_i, dirs, files in os.walk(root):
-        if 'ts' in dirs:
-            paths.append(os.path.join(root_i, 'ts'))
+        if 'test' in dirs:
+            paths.append(os.path.join(root_i, 'test'))
         if 'val' in dirs:
             paths.append(os.path.join(root_i, 'val'))
 
@@ -91,10 +91,16 @@ def delete_advx_ts(root):
 
 
 if __name__ == '__main__':
-    root = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    roots = [
+        'day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL',
+        'day-27-09-2024_hr-17-20-53_IMAGENET_SECOND_TRIAL',
+        'day-28-09-2024_hr-19-11-38_IMAGENET_ADAM_LR-1e-2_90epochs',
+        'day-30-09-2024_hr-11-53-10_IMAGENET_ADAM_LR-1e-3_10epochs'
+    ]
     # root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB/advx_ft'
     # # delete_non_last_checkpoints(root)
-    delete_advx_ts(root)
+    for root in roots:
+        delete_advx_ts(os.path.join('results', root))
     
     # old_model_ids = [5,5,6]
     # model_ids = [4,7,7]

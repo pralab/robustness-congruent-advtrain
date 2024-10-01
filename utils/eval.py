@@ -4,8 +4,31 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import pickle
-from .utils import model_pairs_str_to_ids, MODEL_NAMES
+# from utils import model_pairs_str_to_ids, MODEL_NAMES
+import utils.utils as ut
+import os
 
+
+
+# def check_baseline_clean(mid, ds_name, logger, random_seed, ds_id=ut.cifar10_id, sel_advx=False):
+#     """
+#     If baseline advx already exists for model<mid> load it in correct_adv
+#     otherwise compute, save and return
+#     """
+#     type = 'clean' if not sel_advx else 'advx'
+#     root = f'results/{type}' if ds_id==ut.cifar10_id else f'results/{type}-imagenet'
+#     correct_adv_fname = os.path.join(root, ut.MODEL_NAMES[ds_id][mid], f"correct_preds_{ds_name}.gz")
+#     try:
+#         # Load WB advx predictions of Mold
+#         with open(correct_adv_fname, 'rb') as f:
+#             correct = pickle.load(f)
+#     except:
+#         logger.debug(f"Baseline {ds_name} advx for M{mid} does not exist. Generating...")
+#         ut.set_all_seed(random_seed)
+#         generate_baseline_advx(mid, ds_name=ds_name)
+#         with open(correct_adv_fname, 'rb') as f:
+#             correct_adv = pickle.load(f)
+#     return correct
 
 def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, device=None):
     if device is None:
@@ -130,12 +153,12 @@ def compute_common_nflips(clean_nf_idxs, advx_nf_idxs, indexes=False):
     return only_acc_nf, only_rob_nf, common_nf
 
 
-def retrieve_baseline_bnf(model_pair_str):
-    old_id, new_id = model_pairs_str_to_ids(model_pair_str)
-    old_correct_clean_path = f"results/clean/{MODEL_NAMES[old_id]}/correct_preds.gz"
-    new_correct_clean_path = f"results/clean/{MODEL_NAMES[new_id]}/correct_preds.gz"
-    old_correct_adv_path = f"results/advx/{MODEL_NAMES[old_id]}/correct_preds_test.gz"
-    new_correct_adv_path = f"results/advx/{MODEL_NAMES[new_id]}/correct_preds_test.gz"
+def retrieve_baseline_bnf(model_pair_str, ds_id=ut.cifar10_id):
+    old_id, new_id = ut.model_pairs_str_to_ids(model_pair_str)
+    old_correct_clean_path = f"results/clean/{ut.MODEL_NAMES[ds_id][old_id]}/correct_preds.gz"
+    new_correct_clean_path = f"results/clean/{ut.MODEL_NAMES[ds_id][new_id]}/correct_preds.gz"
+    old_correct_adv_path = f"results/advx/{ut.MODEL_NAMES[ds_id][old_id]}/correct_preds_test.gz"
+    new_correct_adv_path = f"results/advx/{ut.MODEL_NAMES[ds_id][new_id]}/correct_preds_test.gz"
 
     with open(old_correct_clean_path, 'rb') as f:
         old_correct_clean = pickle.load(f)
@@ -184,19 +207,19 @@ def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
 
 if __name__ == "__main__":
     import pandas as pd
-    from secml.utils import fm
+    # from secml.utils import fm
 
-    MODEL_NAMES = ['Kang2021Stable',
-                   'Rebuffi2021Fixing_70_16_cutmix_extra',
-                   'Gowal2021Improving_70_16_ddpm_100m']
+    # MODEL_NAMES = ['Kang2021Stable',
+    #                'Rebuffi2021Fixing_70_16_cutmix_extra',
+    #                'Gowal2021Improving_70_16_ddpm_100m']
 
-    ROOT = 'data'
-    exp_folder_name = fm.join(ROOT, 'exp_prova2')
-    advx_folder = fm.join(exp_folder_name, 'advx')
-    predictions_folder = fm.join(exp_folder_name, 'predictions')
+    # ROOT = 'data'
+    # exp_folder_name = fm.join(ROOT, 'exp_prova2')
+    # advx_folder = fm.join(exp_folder_name, 'advx')
+    # predictions_folder = fm.join(exp_folder_name, 'predictions')
 
-    df_old = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[0]}_predictions.csv"), index_col=0)
-    df_new = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[1]}_predictions.csv"), index_col=0)
+    # df_old = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[0]}_predictions.csv"), index_col=0)
+    # df_new = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[1]}_predictions.csv"), index_col=0)
 
 
 
