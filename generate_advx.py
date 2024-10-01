@@ -1,9 +1,7 @@
 from robustbench.utils import load_model
 # from secml.utils import fm
 import pickle
-from utils.utils import MODEL_NAMES, advx_fname, custom_dirname, \
-    ADVX_DIRNAME_DEFAULT, ADVX_IMAGENET_DIRNAME_DEFAULT, FINETUNING_DIRNAME_DEFAULT, \
-    set_all_seed, init_logger, used_memory_percentage
+import utils.utils as ut
 from utils.eval import correct_predictions, get_pct_results, compute_nflips, compute_pflips
 import utils.utils as ut
 import math
@@ -47,7 +45,7 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
     
     k=0 # index for samples
     fname_to_target = {}
-    set_all_seed(random_seed)
+    ut.set_all_seed(random_seed)
     with tqdm(total=len(ds_loader)) as t:
         for batch_idx, (x,y) in enumerate(ds_loader):
             x, y = x.to(device), y.to(device)
@@ -81,7 +79,8 @@ def generate_advx_ds(model, ds_loader, ds_path, logger=None, device=None,
                     with open(os.path.join(ds_path, 'fname_to_target.json'), 'w') as f:
                         json.dump(fname_to_target, f)
                     return
-                
+    with open(os.path.join(ds_path, 'fname_to_target.json'), 'w') as f:
+        json.dump(fname_to_target, f)         
     return 
 
 
@@ -95,7 +94,7 @@ def generate_advx(ds_loader, model, adv_dir_path, logger, device, attack='apgd',
 
     cartella advx_folder con dentro gli advx WB per ogni modello selezionato
     """
-
+    logger.debug(f"Using EPS = {eps}")
     ds = ds_loader.dataset
     batch_size_temp = ds_loader.batch_size
     escape_flag = 5
@@ -162,34 +161,110 @@ def get_models_info_list(root, advx_folder, nopes=None):
     return models_info_list, old_models_idx, new_models_idx
 
 
-def check_baseline_advx(mid, ds_name, logger, random_seed):
+# def check_baseline_advx(mid, ds_name, logger, random_seed, ds_id=ut.cifar10_id):
+#     """
+#     If baseline advx already exists for model<mid> load it in correct_adv
+#     otherwise compute, save and return
+#     """
+#     root = f'results/{ut.ADVX_DIRNAME_DEFAULT}' if ds_id=='cifar10' else f'results/{ut.ADVX_IMAGENET_DIRNAME_DEFAULT}'
+#     correct_adv_fname = os.path.join(root, ut.MODEL_NAMES[ds_id][mid], f"correct_preds_{ds_name}.gz")
+#     try:
+#         # Load WB advx predictions of Mold
+#         with open(correct_adv_fname, 'rb') as f:
+#             correct_adv = pickle.load(f)
+#     except:
+#         logger.debug(f"Baseline {ds_name} advx for M{mid} does not exist. Generating...")
+#         ut.set_all_seed(random_seed)
+#         generate_baseline_advx(mid, ds_name=ds_name)
+#         with open(correct_adv_fname, 'rb') as f:
+#             correct_adv = pickle.load(f)
+#     return correct_adv
+
+
+# def generate_baseline_advx(model_id, ds_name='test', imagenet=False, 
+#                            cuda_id=1, batch_size=500, n_max_advx=None, eps=None):
+#     root = f'results/{ut.ADVX_DIRNAME_DEFAULT}' if not imagenet else f'results/{ut.ADVX_IMAGENET_DIRNAME_DEFAULT}'
+#     os.makedirs(root, exist_ok=True)
+
+#     device = f"cuda:{cuda_id}" if torch.cuda.is_available() else 'cpu'
+#     logger = ut.init_logger(root, fname=f"logger_{ds_name}")
+    
+#     if not imagenet:
+#         _, val_dataset = split_train_valid(
+#             get_cifar10_dataset(train=True, shuffle=False, num_samples=None), train_size=0.8)
+#         test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=None)
+#     else:
+#         _, val_dataset, test_dataset = get_imagenet_dataset(normalize=False)
+#     # shuffle can be set to True if reference models are evaluated on the fly
+#     # without exploiting precomputed outputs
+#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+#     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+#     # for model_id in [2,3,1]:
+
+#     ds_id = ut.cifar10_id if not imagenet else ut.imagenet_id
+#     logger.info(f">>> Model {model_id}")
+#     model_name = ut.MODEL_NAMES[ds_id][model_id]        
+#     # model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
+#     model = load_model(model_name=model_name, dataset=ds_id, threat_model='Linf')
+#     adv_dir_path = os.path.join(root, model_name, ds_name)
+#     if not os.path.isdir(adv_dir_path):
+#         os.makedirs(adv_dir_path)
+#     corrects_path = os.path.join(root, model_name, f"correct_preds_{ds_name}.gz")
+    
+#     if eps is None:
+#         eps = ut.EPS[ds_id]
+#     if n_max_advx is None:
+#         n_max_advx = ut.N_MAX_ADVX[ds_id]
+#     ds_loader = test_loader if ds_name=='test' else val_loader
+#     generate_advx(ds_loader=ds_loader, model=model, 
+#                     adv_dir_path=adv_dir_path, eps=eps,
+#                     model_name=model_name, device=device, logger=logger,
+#                     n_max_advx_samples=n_max_advx)
+#     adv_ds = MyTensorDataset(ds_path=adv_dir_path)
+#     adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
+#     correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
+#     with open(corrects_path, 'wb') as f:
+#         pickle.dump(correct_preds.cpu(), f)
+    
+#     rob_acc = correct_preds.cpu().numpy().mean() * 100
+#     logger.info(f"Robust accuracy: {rob_acc}")
+
+
+def check_baseline(mid, ds_name, logger, random_seed, ds_id=ut.cifar10_id, 
+                   cuda_id=1, batch_size=500, sel_advx=False, n_max_advx=None, eps=None):
     """
     If baseline advx already exists for model<mid> load it in correct_adv
     otherwise compute, save and return
     """
-    correct_adv_fname = os.path.join('results', 'advx', MODEL_NAMES[mid], f"correct_preds_{ds_name}.gz")
+    type = 'clean' if not sel_advx else 'advx'
+    root = f'results/{type}' if ds_id==ut.cifar10_id else f'results/{type}-imagenet'
+    correct_fname = os.path.join(root, ut.MODEL_NAMES[ds_id][mid], f"correct_preds_{ds_name}.gz")
     try:
         # Load WB advx predictions of Mold
-        with open(correct_adv_fname, 'rb') as f:
-            correct_adv = pickle.load(f)
+        with open(correct_fname, 'rb') as f:
+            correct = pickle.load(f)
     except:
-        logger.debug(f"Baseline {ds_name} advx for M{mid} does not exist. Generating...")
-        set_all_seed(random_seed)
-        generate_baseline_advx(mid, ds_name=ds_name)
-        with open(correct_adv_fname, 'rb') as f:
-            correct_adv = pickle.load(f)
-    return correct_adv
+        logger.debug(f"Baseline {ds_name} {type} for M{mid} does not exist. Generating...")
+        ut.set_all_seed(random_seed)
+        generate_baseline(mid, ds_name=ds_name, cuda_id=cuda_id, 
+                          batch_size=batch_size, sel_advx=sel_advx, 
+                          n_max_advx=n_max_advx, eps=eps, ds_id=ds_id)
+        with open(correct_fname, 'rb') as f:
+            correct = pickle.load(f)
+    return correct
 
 
-def generate_baseline_advx(model_id, ds_name='test', imagenet=False, 
-                           cuda_id=1, batch_size=500, n_max_advx=None, eps=None):
-    root = f'results/{ADVX_DIRNAME_DEFAULT}' if not imagenet else f'results/{ADVX_IMAGENET_DIRNAME_DEFAULT}'
+def generate_baseline(model_id, ds_name='test',
+                           cuda_id=1, batch_size=500, sel_advx=False, n_max_advx=None, eps=None, ds_id=ut.cifar10_id):
+    type = 'clean' if not sel_advx else 'advx'
+    root = f'results/{type}' if ds_id==ut.cifar10_id else f'results/{type}-imagenet'
     os.makedirs(root, exist_ok=True)
 
     device = f"cuda:{cuda_id}" if torch.cuda.is_available() else 'cpu'
-    logger = init_logger(root, fname=f"logger_{ds_name}")
+    logger = ut.init_logger(root, fname=f"logger_{ds_name}")
     
-    if not imagenet:
+    if ds_id == ut.cifar10_id:
         _, val_dataset = split_train_valid(
             get_cifar10_dataset(train=True, shuffle=False, num_samples=None), train_size=0.8)
         test_dataset = get_cifar10_dataset(train=False, shuffle=False, num_samples=None)
@@ -201,15 +276,13 @@ def generate_baseline_advx(model_id, ds_name='test', imagenet=False,
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # for model_id in [2,3,1]:
-
-    ds_id = ut.cifar10_id if not imagenet else ut.imagenet_id
     logger.info(f">>> Model {model_id}")
-    model_name = MODEL_NAMES[ds_id][model_id]        
+    model_name = ut.MODEL_NAMES[ds_id][model_id]        
     # model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
     model = load_model(model_name=model_name, dataset=ds_id, threat_model='Linf')
-    adv_dir_path = os.path.join(root, model_name, ds_name)
-    if not os.path.isdir(adv_dir_path):
-        os.makedirs(adv_dir_path)
+    dir_path = os.path.join(root, model_name, ds_name)
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
     corrects_path = os.path.join(root, model_name, f"correct_preds_{ds_name}.gz")
     
     if eps is None:
@@ -217,18 +290,23 @@ def generate_baseline_advx(model_id, ds_name='test', imagenet=False,
     if n_max_advx is None:
         n_max_advx = ut.N_MAX_ADVX[ds_id]
     ds_loader = test_loader if ds_name=='test' else val_loader
-    generate_advx(ds_loader=ds_loader, model=model, 
-                    adv_dir_path=adv_dir_path, eps=eps,
-                    model_name=model_name, device=device, logger=logger,
-                    n_max_advx_samples=n_max_advx)
-    adv_ds = MyTensorDataset(ds_path=adv_dir_path)
-    adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
-    correct_preds = correct_predictions(model=model, test_loader=adv_ds_loader, device=device)
+
+    if sel_advx:
+        generate_advx(ds_loader=ds_loader, model=model, 
+                        adv_dir_path=dir_path, eps=eps,
+                        model_name=model_name, device=device, logger=logger,
+                        n_max_advx_samples=n_max_advx)
+        adv_ds = MyTensorDataset(ds_path=dir_path)
+        ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
+    
+    correct_preds = correct_predictions(model=model, test_loader=ds_loader, device=device)
+    
     with open(corrects_path, 'wb') as f:
         pickle.dump(correct_preds.cpu(), f)
     
-    rob_acc = correct_preds.cpu().numpy().mean() * 100
-    logger.info(f"Robust accuracy: {rob_acc}")
+    acc = correct_preds.cpu().numpy().mean() * 100
+    type_of_acc = "Robust" if sel_advx else "Clean"
+    logger.info(f"{type_of_acc} accuracy: {acc}")
 
 
 def generate_advx_main(root, logger=None):
@@ -243,7 +321,7 @@ def generate_advx_main(root, logger=None):
     num_samples = 2000
 
 
-    set_all_seed(0)
+    ut.set_all_seed(0)
     
     # roots = ['results/day-25-01-2023_hr-15-38-00_epochs-12_batchsize-500_CLEAN_TR',
     #         'results/day-30-01-2023_hr-10-01-02_epochs-12_batchsize-500_ADV_TR']
@@ -255,13 +333,13 @@ def generate_advx_main(root, logger=None):
 
 
     advx_folder = os.path.join(root, 
-                        custom_dirname(ADVX_DIRNAME_DEFAULT, ft_models=True, tr_set=False))
+                        ut.custom_dirname(ut.ADVX_DIRNAME_DEFAULT, ft_models=True, tr_set=False))
     if not os.path.isdir(advx_folder):
         os.mkdir(advx_folder)
 
     pfname = 'progress_advx_mix_add'
     if logger is None:
-        logger = init_logger(advx_folder, fname=pfname + f"_{device}" if split_cuda else pfname)
+        logger = ut.init_logger(advx_folder, fname=pfname + f"_{device}" if split_cuda else pfname)
     models_info_list, old_models_idx, new_models_idx = get_models_info_list(root, advx_folder, nopes=None)
 
     if split_cuda:
@@ -279,7 +357,7 @@ def generate_advx_main(root, logger=None):
     # models_id = np.unique(np.array(new_models_idx + old_models_idx))
     # nope_list = []
     # for model_id in models_id:
-    #     model_name = MODEL_NAMES[model_id]
+    #     model_name = ut.MODEL_NAMES[model_id]
     #     logger.info(f"-> {model_id} - {model_name}")   
     #     model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
     #     base_path = os.path.join('results', 'advx', model_name)
@@ -345,7 +423,7 @@ def generate_advx_main(root, logger=None):
         #     continue
 
         # if not os.path.exists(os.path.join(model_info['advx_path'], f"results_{model_info['tr_model_sel']}.gz")):                
-        model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        model_name = ut.MODEL_NAMES[model_info['robustbench_idx']]
         
         # Load finetuned model
         model = load_model(model_name=model_name, dataset='cifar10', threat_model='Linf')
@@ -367,10 +445,10 @@ def generate_advx_main(root, logger=None):
         adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
 
         # Load WB advx predictions of M0 and M1
-        old_model_name = MODEL_NAMES[model_info['robustbench_old_idx']]
+        old_model_name = ut.MODEL_NAMES[model_info['robustbench_old_idx']]
         with open(os.path.join('results', 'advx', old_model_name, 'correct_preds.gz'), 'rb') as f:
             old_correct = pickle.load(f)
-        new_model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        new_model_name = ut.MODEL_NAMES[model_info['robustbench_idx']]
         with open(os.path.join('results', 'advx', new_model_name, 'correct_preds.gz'), 'rb') as f:
             new_correct = pickle.load(f)
         
@@ -403,10 +481,10 @@ def generate_advx_main(root, logger=None):
         #         adv_ds_loader = DataLoader(adv_ds, batch_size=batch_size)
 
         #         # Load WB advx predictions of M0 and M1
-        #         old_model_name = MODEL_NAMES[model_info['robustbench_old_idx']]
+        #         old_model_name = ut.MODEL_NAMES[model_info['robustbench_old_idx']]
         #         with open(os.path.join('results', 'advx', old_model_name, 'correct_preds.gz'), 'rb') as f:
         #             old_correct = pickle.load(f)
-        #         new_model_name = MODEL_NAMES[model_info['robustbench_idx']]
+        #         new_model_name = ut.MODEL_NAMES[model_info['robustbench_idx']]
         #         with open(os.path.join('results', 'advx', new_model_name, 'correct_preds.gz'), 'rb') as f:
         #             new_correct = pickle.load(f)
                 
@@ -455,12 +533,12 @@ if __name__ == '__main__':
     #                     cuda_id=1, batch_size=10, imagenet=True, eps=0.5)
 
     for model_id in range(5):
-        generate_baseline_advx(model_id=model_id, ds_name='val', n_max_advx=9000, 
+        generate_baseline(model_id=model_id, ds_name='val', n_max_advx=9000, 
                             cuda_id=1, batch_size=512, imagenet=True)
         print("")
     
     # for m_id in range(8):
-    #     path = fm.join("results/advx", MODEL_NAMES[m_id], 'correct_preds_val.gz')
+    #     path = fm.join("results/advx", ut.MODEL_NAMES[m_id], 'correct_preds_val.gz')
         
     #     try:
     #         with open(path, 'rb') as f:
