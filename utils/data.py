@@ -165,7 +165,7 @@ def get_mnist_dataset(data_dir='datasets/MNIST', train=True,
 
 
 def get_imagenet_dataset(data_dir='datasets/imagenet/imagenet_val',
-                         normalize=True, 
+                         normalize=True,
                          num_train_samples=45000,
                          train_size=0.8,
                          random_seed=0):
