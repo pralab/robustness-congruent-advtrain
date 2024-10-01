@@ -6,7 +6,7 @@ from utils.data import MyTensorDataset
 from utils.visualization import show_hps_behaviour, plot_loss
 import utils.utils as ut
 
-from generate_advx import generate_advx, generate_baseline_advx, check_baseline_advx
+from generate_advx import generate_advx, check_baseline
 from manage_files import delete_advx_ts
 
 import torch
@@ -43,8 +43,10 @@ import matplotlib.pyplot as plt
 
 def train_pct_model(model, old_model,
                     train_loader, val_loader,
-                    epochs, loss_name, lr, random_seed, device, 
+                    epochs, loss_name, lr, 
+                    random_seed, device, 
                     alpha, beta, exp_dir,
+                    optim = 'sgd',
                     adv_training: bool = False,
                     ds_id=ut.cifar10_id,
                     logger=None):
@@ -80,20 +82,24 @@ def train_pct_model(model, old_model,
     #     logger.debug = print
 
     # Obtain outputs of old model (the reference model) and new model (the one that we train)
-    # try:
-    #     # If already computed load them ...
-    #     with open(os.path.join(exp_dir, 'baseline.gz'), 'rb') as f:
-    #         train_outputs = pickle.load(f)
-    # except:
-    #     # ... otherwise compute
-    #     train_outputs = {}
-    #     train_outputs['old'] = get_ds_outputs(old_model, train_loader, device).cpu()   #needed for PCT finetuning
-    #     train_outputs['new'] = get_ds_outputs(model, train_loader, device).cpu() 
-    #     os.makedirs(exp_dir, exist_ok=True)
-    #     with open(os.path.join(exp_dir, 'baseline.gz'), 'wb') as f:
-    #         pickle.dump(train_outputs, f)
+    if ds_id == ut.cifar10_id:
+        try:
+            # If already computed load them ...
+            with open(os.path.join(exp_dir, 'baseline.gz'), 'rb') as f:
+                train_outputs = pickle.load(f)
+        except:
+            # ... otherwise compute
+            train_outputs = {}
+            train_outputs['old'] = get_ds_outputs(old_model, train_loader, device).cpu()   #needed for PCT finetuning
+            train_outputs['new'] = get_ds_outputs(model, train_loader, device).cpu() 
+            os.makedirs(exp_dir, exist_ok=True)
+            with open(os.path.join(exp_dir, 'baseline.gz'), 'wb') as f:
+                pickle.dump(train_outputs, f)
 
-    # old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
+        old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
+
+    else:
+        old_outputs, new_outputs = None, None   # TODO: modified as train_loader has shuffle=True
 
     # ut.set_all_seed(random_seed)
 
@@ -111,7 +117,6 @@ def train_pct_model(model, old_model,
     #         pickle.dump(train_outputs, f)
 
     # old_outputs, new_outputs = train_outputs['old'].to(device), train_outputs['new'].to(device)
-    old_outputs, new_outputs = None, None   # TODO: modified as train_loader has shuffle=True
 
     # ut.set_all_seed(random_seed)
     
@@ -137,8 +142,14 @@ def train_pct_model(model, old_model,
         mixmse = True
     
     # Set the optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    if optim == 'adam':
+        logger.debug(f"Using Adam optimizer.")
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    else:
+        # set SGD by default
+        logger.debug(f"Using SGD optimizer.")
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+
 
     # todo: rendere opzioni scheduler tramite parser
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
@@ -168,7 +179,7 @@ def train_pct_model(model, old_model,
     # Start the training loop...
     for e in range(epochs):
         if not adv_training:
-            pc_train_epoch(model=model, device=device, train_loader=train_loader, 
+            pc_train_epoch(model=model, old_model=old_model, device=device, train_loader=train_loader, 
                     optimizer=optimizer, epoch=e, loss_fn=loss_fn, logger=logger)
             
         else:
@@ -355,15 +366,19 @@ def train_pct_pipeline(args):
 
     os.makedirs(exp_path, exist_ok=True)
 
-    ut.save_params(locals().items(), exp_path, 'info')
+    if not args.test_only:
+        ut.save_params(locals().items(), exp_path, 'info')
 
-    logger = ut.init_logger(exp_path, fname=f'progress_{args.exp_name}-cuda_{args.cuda}', level=logging.DEBUG)
+    logger_fname = f'train_{args.exp_name}-cuda_{args.cuda}' if not args.test_only else f'test_{args.exp_name}-cuda_{args.cuda}'
+    logger = ut.init_logger(exp_path, fname=logger_fname, level=logging.DEBUG)
 
     #####################################
     # PREPARE DATA
     #####################################
     ut.set_all_seed(args.random_seed)
-    if not args.imagenet:
+    ds_id = args.dataset
+    logger.info(f"------- DATASET: {ds_id} -------") 
+    if ds_id == ut.cifar10_id:
         train_dataset, val_dataset = split_train_valid(
             get_cifar10_dataset(train=True, shuffle=True, num_samples=args.n_tr, 
                                 random_seed=args.random_seed), train_size=0.8)
@@ -373,9 +388,8 @@ def train_pct_pipeline(args):
     # shuffle can be set to True if reference models are evaluated on the fly
     # without exploiting precomputed outputs
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
-    ds_id = ut.cifar10_id if not args.imagenet else ut.imagenet_id
+    val_loader = DataLoader(val_dataset, batch_size=args.test_batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False)
 
     #############################
     # MODEL PAIR LEVEL
@@ -387,32 +401,18 @@ def train_pct_pipeline(args):
         model_pair_path = os.path.join(exp_path, model_pair_dir)
         os.makedirs(model_pair_path, exist_ok=True)
 
-        # The architecture of the old model will be the same, I load it here
-        old_model = load_model(ut.MODEL_NAMES[ds_id][old_model_id], dataset=ds_id, threat_model='Linf') 
-        
-        model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf')
         # Starting test set performances
         logger.debug('Get baseline results')
         
-        base_results = {}
-        for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):
-            base_results[ds_name] = get_pct_results(new_model=model, ds_loader=ds_loader, 
-                                            old_model=old_model,
-                                            device=device)
-
-            logger.info(print_perf(f"\n>>> Starting {ds_name} perf \n",
-                base_results[ds_name]['old_acc'], base_results[ds_name]['new_acc'], 
-                base_results[ds_name]['nfr'], base_results[ds_name]['pfr']))     
-
         #############################
         # LOSS TYPE LEVEL
         #############################
-        for loss_name in args.loss_names:
-            logger.info(f"------- LOSS: {loss_name} --------")
-            loss_dir_path = os.path.join(model_pair_path, loss_name)      
+        for _loss_name in args.loss_names:
+            logger.info(f"------- LOSS: {_loss_name} --------")
+            loss_dir_path = os.path.join(model_pair_path, _loss_name)      
             # NB: non mi serve fare un check per creare la cartella perchè lo faccio un livello dopo            
-            adv_at_sel = 'AT' in loss_name
-            loss_name = loss_name.split('-AT')[0]
+            adv_at_sel = 'AT' in _loss_name
+            loss_name = _loss_name.split('-AT')[0]
             #############################
             # HYPERPARAMETERS LEVEL
             #############################
@@ -434,13 +434,15 @@ def train_pct_pipeline(args):
                         #####################################
                         # TRAIN POSITIVE CONGRUENT
                         #####################################
-                        model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf')
+                        old_model = load_model(ut.MODEL_NAMES[ds_id][old_model_id], dataset=ds_id, threat_model='Linf').to(device)
+                        model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf').to(device)
                         
                         if not args.test_only:
                             logger.debug('Start training...')
                             train_pct_model(model=model, old_model=old_model,
                                             train_loader=train_loader, val_loader=val_loader,
-                                            epochs=args.epochs, loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
+                                            epochs=args.epochs, optim=args.optim,
+                                            loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
                                             alpha=alpha, beta=beta, ds_id=ds_id,
                                             adv_training=adv_at_sel,#args.adv_tr,
                                             logger=logger, exp_dir=params_dir_path)#, writer=writer)
@@ -460,7 +462,9 @@ def train_pct_pipeline(args):
                     checkpoint = torch.load(model_fname, map_location=device)
                     model.load_state_dict(checkpoint['model_state_dict'])
                     
-                    for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):                          
+                    # for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):    
+                    # for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):
+                    for ds_loader, ds_name in zip([test_loader], ['test']):                               
                         results_fname = os.path.join(params_dir_path, f"results_{ds_name}.gz")
                         clean_results_fname = os.path.join(params_dir_path, f"results_clean_{ds_name}.gz")
                         adv_results_fname = os.path.join(params_dir_path, f"results_advx_{ds_name}.gz")
@@ -478,22 +482,34 @@ def train_pct_pipeline(args):
                         
                         loaded_results, results_check, clean_check, advx_check = check(results_fname)
 
+                        if args.test_overwrite:
+                            clean_check, advx_check = False, False
+
                                 
                         if not clean_check:
                             #####################################
                             # SAVE CLEAN RESULTS
                             #####################################
                             logger.info(f'Evaluating {ds_name} set ...')
+                            old_correct_clean = check_baseline(old_model_id, ds_name, logger, 
+                                                               args.random_seed, ds_id,
+                                                               cuda_id=args.cuda, batch_size=args.test_batch_size, 
+                                                               sel_advx=False)
+                            new_correct_clean = check_baseline(model_id, ds_name, logger, 
+                                                               args.random_seed, ds_id,
+                                                               cuda_id=args.cuda, batch_size=args.test_batch_size, 
+                                                               sel_advx=False)
                             
+                            # Get results of model M wrt M0 and M1
                             ut.set_all_seed(args.random_seed)
                             clean_results = get_pct_results(new_model=model, ds_loader=ds_loader, 
-                                                        old_correct=base_results[ds_name]['old_correct'],
+                                                        old_correct=old_correct_clean,
                                                         device=device)
+                            # Add baseline results for comparison
                             clean_results['loss'] = checkpoint['loss'].loss_path
-                            clean_results['val_loss'] = checkpoint['val_loss'].loss_path
-                            clean_results['orig_acc'] = base_results[ds_name]['new_acc']
-                            clean_results['orig_nfr'] = base_results[ds_name]['nfr']
-                            clean_results['orig_pfr'] = base_results[ds_name]['pfr']
+                            clean_results['orig_acc'] = new_correct_clean.cpu().numpy().mean()
+                            clean_results['orig_nfr'] = compute_nflips(old_correct_clean, new_correct_clean)
+                            clean_results['orig_pfr'] = compute_pflips(old_correct_clean, new_correct_clean)
                             with open(clean_results_fname, 'wb') as f:
                                 pickle.dump(clean_results, f)
                                 
@@ -513,18 +529,26 @@ def train_pct_pipeline(args):
                             #####################################
                             try:
                                 logger.debug(f'Generating advx on {ds_name} set ...')
-                                adv_dir_path = os.path.join(params_dir_path, 'advx', 'ts')
+                                adv_dir_path = os.path.join(params_dir_path, 'advx', ds_name)
 
                                 ut.set_all_seed(args.random_seed)
                                 generate_advx(model=model, ds_loader=ds_loader, n_steps=args.n_steps, 
                                             adv_dir_path=adv_dir_path,
                                             logger=logger, device=device,
-                                            n_max_advx_samples=args.n_adv_ts)                            
+                                            n_max_advx_samples=args.n_adv_ts,
+                                            eps=ut.EPS[ds_id])                            
                                 adv_ds = MyTensorDataset(ds_path=adv_dir_path)
                                 adv_ds_loader = DataLoader(adv_ds, batch_size=ds_loader.batch_size)
 
-                                old_correct_adv = check_baseline_advx(old_model_id, ds_name, logger, args.random_seed)
-                                new_correct_adv = check_baseline_advx(model_id, ds_name, logger, args.random_seed)
+                                old_correct_adv = check_baseline(old_model_id, ds_name, logger, 
+                                                                args.random_seed, ds_id,
+                                                                cuda_id=args.cuda, batch_size=args.test_batch_size, 
+                                                                sel_advx=True, n_max_advx=args.n_adv_ts, eps=None)
+                                new_correct_adv = check_baseline(model_id, ds_name, logger, 
+                                                                args.random_seed, ds_id,
+                                                                cuda_id=args.cuda, batch_size=args.test_batch_size, 
+                                                                sel_advx=True)
+
                                 # todo: dopo aver pigliato i correct veri per test o ts
                                 # uso le predizioni già salvate e le confronto con la baseline (da calcolare a parte con generate_baseline_advx)
                                 
@@ -541,7 +565,7 @@ def train_pct_pipeline(args):
                                 with open(adv_results_fname, 'wb') as f:
                                     pickle.dump(adv_results, f)
                                 
-                                delete_advx_ts(params_dir_path)
+                                # delete_advx_ts(params_dir_path)
                                 advx_check = True
 
                             except Exception as e:
@@ -564,12 +588,13 @@ def train_pct_pipeline(args):
                         
                             if ds_name=='test':
                                 fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-                                plot_loss(results['clean']['loss'], ax)
+                                plot_loss(results['clean']['loss'], ax, window=20)
+                                ax.set_title(_loss_name)
                                 fig.savefig(os.path.join(params_dir_path, "loss_path.pdf"))
-                            else:
-                                fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-                                plot_loss(results['clean']['val_loss'], ax)
-                                fig.savefig(os.path.join(params_dir_path, "val_loss_path.pdf")) 
+                            # else:
+                            #     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+                            #     plot_loss(results['clean']['val_loss'], ax)
+                            #     # fig.savefig(os.path.join(params_dir_path, "val_loss_path.pdf")) 
                             
                             logger.info(f">>> Clean Results")
                             logger.info(f"Old Acc: {results['clean']['old_acc']}")
@@ -625,35 +650,39 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
 
-    parser.add_argument('-exp_name', default='DEBUG_VANILLA', type=str)
+    parser.add_argument('-exp_name', default='DEBUG', type=str)
     parser.add_argument('-root', default='results', type=str)
 
-    parser.add_argument('-n_tr', default=100, type=int)   
-    parser.add_argument('-n_ts', default=100, type=int) 
+    parser.add_argument('-n_tr', default=45000, type=int)   
+    parser.add_argument('-n_ts', default=5000, type=int) 
 
-    parser.add_argument('-epochs', default=2, type=int)  
+    parser.add_argument('-epochs', default=10, type=int)  
     parser.add_argument('-lr', default=1e-3, type=float)
-    parser.add_argument('-batch_size', default=128, type=int)   
+    parser.add_argument('-batch_size', default=128, type=int)  
+    parser.add_argument('-optim', default='sgd', type=str) 
+    parser.add_argument('-test_batch_size', default=512, type=int)    
     
-    parser.add_argument('-n_steps', default=10, type=int, help='number of attack steps during robusntess evaluation')
-    parser.add_argument('-n_adv_ts', default=200, type=int, help='number of advx used for robustness evaluation')
+    parser.add_argument('-n_steps', default=50, type=int, help='number of attack steps during robusntess evaluation')
+    parser.add_argument('-n_adv_ts', default=10000, type=int, help='number of advx used for robustness evaluation')
     
     parser.add_argument('-old_model_ids', default=[0], type=int, nargs='+')
     parser.add_argument('-model_ids', default=[1], type=int, nargs='+')
-    parser.add_argument('-loss_names', default=['MixMSE-AT'], type=str, nargs='+')
+    parser.add_argument('-loss_names', default=['PCT', 'PCT-AT', 'MixMSE-AT'], type=str, nargs='+')
     parser.add_argument('-alphas_mix', default=[0.5], type=float, nargs='+')
     parser.add_argument('-betas_mix', default=[0.4], type=float, nargs='+')
-    parser.add_argument('-alphas_pct', default=[1], type=float, nargs='+')
-    parser.add_argument('-betas_pct', default=[2], type=float, nargs='+')
+    parser.add_argument('-alphas_pct', default=[1.], type=float, nargs='+')
+    parser.add_argument('-betas_pct', default=[2.], type=float, nargs='+')
 
     
     parser.add_argument('-date', action='store_true')
     parser.add_argument('-test_only', action='store_true')
+    parser.add_argument('-test_overwrite', action='store_true')
 
-    parser.add_argument('-imagenet', action='store_true')
+    parser.add_argument('-dataset', default=ut.cifar10_id, type=str, 
+                        choices=[ut.cifar10_id, ut.imagenet_id])
     
     parser.add_argument('-random_seed', default=0, type=int)
-    parser.add_argument('-cuda', default=1, type=int)
+    parser.add_argument('-cuda', default=0, type=int)
     
     
     args = parser.parse_args()
