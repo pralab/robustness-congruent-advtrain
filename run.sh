@@ -75,7 +75,7 @@ cmd="nohup python -m train_model -dataset $dataset -n_tr $n_tr -n_ts $n_ts -epoc
 
 
 # $cmd -exp_name $exp_name -date &> nohups/nohup_${exp_name}.out &
-$cmd -exp_name $exp_name &> nohups/nohup_${exp_name}.out &
+$cmd -exp_name $exp_name -test_only &> nohups/nohup_${exp_name}.out &
 
 # Inserted cuda 1
 # PID of this script: 524143
