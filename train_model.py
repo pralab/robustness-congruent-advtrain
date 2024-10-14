@@ -463,8 +463,8 @@ def train_pct_pipeline(args):
                     model.load_state_dict(checkpoint['model_state_dict'])
                     
                     # for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):    
-                    # for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):
-                    for ds_loader, ds_name in zip([test_loader], ['test']):                               
+                    for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):
+                        # for ds_loader, ds_name in zip([test_loader], ['test']):                               
                         results_fname = os.path.join(params_dir_path, f"results_{ds_name}.gz")
                         clean_results_fname = os.path.join(params_dir_path, f"results_clean_{ds_name}.gz")
                         adv_results_fname = os.path.join(params_dir_path, f"results_advx_{ds_name}.gz")
@@ -597,23 +597,23 @@ def train_pct_pipeline(args):
                             #     # fig.savefig(os.path.join(params_dir_path, "val_loss_path.pdf")) 
                             
                             logger.info(f">>> Clean Results")
-                            logger.info(f"Old Acc: {results['clean']['old_acc']}")
-                            logger.info(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}")
-                            logger.info(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}")
+                            logger.info(f"Old Acc: {results['clean']['old_acc']:.4f}")
+                            logger.info(f"New Acc: {results['clean']['orig_acc']:.4f}, New Acc(FT): {results['clean']['new_acc']:.4f}")
+                            logger.info(f"New NFR: {results['clean']['orig_nfr']:.4f}, New NFR(FT): {results['clean']['nfr']:.4f}")
                             logger.info(f">>> Advx Results")
-                            logger.info(f"Old Acc: {results['advx']['old_acc']}")
-                            logger.info(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}")
-                            logger.info(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}")
+                            logger.info(f"Old Acc: {results['advx']['old_acc']:.4f}")
+                            logger.info(f"New Acc: {results['advx']['orig_acc']:.4f}, New Acc(FT): {results['advx']['new_acc']:.4f}")
+                            logger.info(f"New NFR: {results['advx']['orig_nfr']:.4f}, New NFR(FT): {results['advx']['nfr']:.4f}")
                             logger.info("")
                             with open(os.path.join(params_dir_path, f"{ds_name}_perf.txt"), 'w') as f:
                                 f.write(f">>> Clean Results\n")
-                                f.write(f"Old Acc: {results['clean']['old_acc']}\n")
-                                f.write(f"New Acc: {results['clean']['orig_acc']}, New Acc(FT): {results['clean']['new_acc']}\n")
-                                f.write(f"New NFR: {results['clean']['orig_nfr']}, New NFR(FT): {results['clean']['nfr']}\n")
+                                f.write(f"Old Acc: {results['clean']['old_acc']:.4f}\n")
+                                f.write(f"New Acc: {results['clean']['orig_acc']:.4f}, New Acc(FT): {results['clean']['new_acc']:.4f}\n")
+                                f.write(f"New NFR: {results['clean']['orig_nfr']:.4f}, New NFR(FT): {results['clean']['nfr']:.4f}\n")
                                 f.write(f">>> Advx Results\n")
-                                f.write(f"Old Acc: {results['advx']['old_acc']}\n")
-                                f.write(f"New Acc: {results['advx']['orig_acc']}, New Acc(FT): {results['advx']['new_acc']}\n")
-                                f.write(f"New NFR: {results['advx']['orig_nfr']}, New NFR(FT): {results['advx']['nfr']}\n")
+                                f.write(f"Old Acc: {results['advx']['old_acc']:.4f}\n")
+                                f.write(f"New Acc: {results['advx']['orig_acc']:.4f}, New Acc(FT): {results['advx']['new_acc']:.4f}\n")
+                                f.write(f"New NFR: {results['advx']['orig_nfr']:.4f}, New NFR(FT): {results['advx']['nfr']:.4f}\n")
                         else:
                             logger.debug(f"Clean check: {clean_check}, Advx check: {advx_check}, Results cannot be saved jointly.")
                     logger.info("")
