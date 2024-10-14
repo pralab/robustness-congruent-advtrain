@@ -463,8 +463,8 @@ def train_pct_pipeline(args):
                     model.load_state_dict(checkpoint['model_state_dict'])
                     
                     # for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):    
-                    for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):
-                        # for ds_loader, ds_name in zip([test_loader], ['test']):                               
+                    # for ds_loader, ds_name in zip([test_loader], ['test']):       
+                    for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):                        
                         results_fname = os.path.join(params_dir_path, f"results_{ds_name}.gz")
                         clean_results_fname = os.path.join(params_dir_path, f"results_clean_{ds_name}.gz")
                         adv_results_fname = os.path.join(params_dir_path, f"results_advx_{ds_name}.gz")
