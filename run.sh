@@ -1,7 +1,7 @@
 # export PYTHONPATH='../':$PYTHONPATH
 #!/bin/bash
 
-cuda="1"
+cuda="$1"
 echo "Inserted cuda $cuda"
 
 echo "PID of this script: $$"

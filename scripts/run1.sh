@@ -2,7 +2,7 @@ export PYTHONPATH='../':$PYTHONPATH
 #!/bin/bash
 echo "PWD: $PWD"
 
-cuda="$1"
+cuda="1"
 echo "Inserted cuda $cuda"
 
 echo "PID of this script: $$"
@@ -10,10 +10,10 @@ echo "PID of this script: $$"
 dataset="imagenet"
 n_tr="50000"
 n_ts="10000"
-epochs="10"
+epochs="5"
 lr="1e-3"
 optim="sgd"
-batch_size="128"
+batch_size="64"
 n_steps="50"
 n_adv_ts="10000"
 # n_tr="500"
@@ -27,8 +27,8 @@ n_adv_ts="10000"
 # All 14 combinations of models with both increasing clean and robust accuracy
 
 
-old_model_ids="0"
-model_ids="1"
+old_model_ids="3"
+model_ids="4"
 
 # if test "$cuda" = "0"
 # then
@@ -53,8 +53,8 @@ loss_names="MixMSE-AT"
 alphas_pct="1"
 betas_pct="2"   
 
-alphas_mix="0.5"
-betas_mix="0.4" 
+alphas_mix="0.3 0.5 0.6 0.7 0.75"
+betas_mix="0.6 0.4 0.3 0.2 0.2" 
 # alphas_mix="0.75"
 # betas_mix="0.2"   
 
@@ -67,17 +67,16 @@ root="results"
 # exp_name="SPERANZA_2024"
 # exp_name="IMAGENET_SGD_LR-1e-2_30epochs"
 # exp_name="day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL"
-exp_name="day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL-CERBERUS"
+exp_name="day-02-10-2024_hr-15-35-20_IMAGENET_M34_B64"
 
 # exp_name="day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL"
 cmd="nohup python -m train_model -dataset $dataset -n_tr $n_tr -n_ts $n_ts -epochs $epochs -lr $lr -optim $optim -batch_size $batch_size -n_steps $n_steps -n_adv_ts $n_adv_ts -old_model_ids $old_model_ids -model_ids $model_ids -loss_names $loss_names -alphas_pct $alphas_pct -betas_pct $betas_pct -alphas_mix $alphas_mix -betas_mix $betas_mix -root $root -cuda $cuda" 
+# $cmd -exp_name $exp_name_at -adv_tr &> results/nohup_${exp_name_at}.out; 
+# $cmd -exp_name $exp_name -date &> nohups/nohup_${exp_name}.out &
+
 
 # $cmd -exp_name $exp_name -date &> nohups/nohup_${exp_name}.out &
-$cmd -exp_name $exp_name &> nohups/nohup_${exp_name}.out &
-
-# Inserted cuda 0
-# PID of this script: 500139
+$cmd -exp_name $exp_name -test_only &> nohups/nohup_${exp_name}.out &
 
 # Inserted cuda 1
-# PID of this script: 501063
-
+# PID of this script: 525779
