@@ -155,7 +155,7 @@ def create_table(path, model_ids=None, old_model_ids=None, loss_names=None,
         
         csv_fname = f"{fname}.csv"
         model_results_df_list.to_csv(join(path, csv_fname))
-        latex_table(model_results_df_list, dir_out=path, fname=fname)
+        latex_table(model_results_df_list, dir_out=path, fname=fname, errors=True)
         print(os.path.join(path, fname))
     
     # print(model_results_df_list)
@@ -299,12 +299,13 @@ def latex_table(df, diff=False, errors=False, perc=False, dir_out='latex_files',
 
 
 def main_create_table():
-    old_model_ids = [1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
-    model_ids = [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
-    # old_model_ids=[2, 4,]
-    # model_ids=    [4, 7]
+    # old_model_ids = [1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 5, 5, 6]
+    # model_ids = [4, 7, 4, 5, 7, 2, 4, 5, 6, 7, 7, 4, 7, 7]
+    old_model_ids=[0,1,2,3]
+    model_ids=    [1,2,3,4]
     loss_names = ['PCT', 'PCT-AT', 'MixMSE-AT']
-    path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    # path = 'results/day-30-03-2023_hr-10-01-01_PIPELINE_50k_3models'
+    path = 'results/day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL'
     criteria = 'S-NFR'
     ascending = False
     # criteria = 'acc-rob-protocol'
@@ -362,4 +363,5 @@ def main_latex_table():
     
 
 if __name__ == '__main__':
-    main_latex_table()
+    main_create_table()
+    # main_latex_table()
