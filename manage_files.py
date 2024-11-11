@@ -93,16 +93,14 @@ def delete_advx_ts(root):
 if __name__ == '__main__':
     roots = [
         'day-26-09-2024_hr-17-34-46_IMAGENET_FIRST_TRIAL',
-        'day-27-09-2024_hr-17-20-53_IMAGENET_SECOND_TRIAL',
-        'day-28-09-2024_hr-19-11-38_IMAGENET_ADAM_LR-1e-2_90epochs',
-        'day-30-09-2024_hr-11-53-10_IMAGENET_ADAM_LR-1e-3_10epochs'
+        'advx-imagenet'
     ]
     # root = 'results/day-06-03-2023_hr-17-23-52_epochs-12_batchsize-500_HIGH_AB/advx_ft'
     # # delete_non_last_checkpoints(root)
     for root in roots:
         delete_advx_ts(os.path.join('results', root))
     
-    # old_model_ids = [5,5,6]
+    # old_model_ids = [5,5,]
     # model_ids = [4,7,7]
     
     # # old_model_ids = [1]
