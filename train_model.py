@@ -394,8 +394,12 @@ def train_pct_pipeline(args):
     #############################
     # MODEL PAIR LEVEL
     #############################
-    for mid_i, (old_model_id, model_id) in enumerate(zip(args.old_model_ids, args.model_ids)):
-          
+    model_pairs_list = list(zip(args.old_model_ids, args.model_ids))
+    # for mid_i, (old_model_id, model_id) in enumerate(zip(args.old_model_ids, args.model_ids)):
+    for mid_i, (old_model_id, model_id) in enumerate(model_pairs_list):  
+        if args.sequential and args.skip_first and (mid_i == 0):
+            continue
+
         logger.info(f"------- MODELS: {old_model_id} -> {model_id} -------") 
         model_pair_dir = f"old-{old_model_id}_new-{model_id}"
         model_pair_path = os.path.join(exp_path, model_pair_dir)
@@ -427,8 +431,8 @@ def train_pct_pipeline(args):
                     logger.info(f">>> Alpha {alpha}, Beta: {beta}")
                     params_dir = f"a-{alpha}_b-{beta}"
                     params_dir_path = os.path.join(loss_dir_path, params_dir)
-
                     os.makedirs(params_dir_path, exist_ok=True)
+                    model_fname = os.path.join(params_dir_path, 'checkpoints', "last.pt")
 
                     try:
                         #####################################
@@ -436,16 +440,33 @@ def train_pct_pipeline(args):
                         #####################################
                         old_model = load_model(ut.MODEL_NAMES[ds_id][old_model_id], dataset=ds_id, threat_model='Linf').to(device)
                         model = load_model(ut.MODEL_NAMES[ds_id][model_id], dataset=ds_id, threat_model='Linf').to(device)
-                        
+
+                        if args.sequential:
+                            _old_mid, _new_mid = model_pairs_list[mid_i - 1]
+                            _old_model_pair_dir = f"old-{_old_mid}_new-{_new_mid}"
+                            _old_params_dir_path = params_dir_path.replace(model_pair_dir, _old_model_pair_dir)
+                            old_model_fname = os.path.join(_old_params_dir_path, 'checkpoints', "last.pt")
+
+                            if not os.path.exists(old_model_fname):
+                                logger.debug(f"OLD pretrained model does not exist: {old_model_fname}")
+                                logger.debug(f"Keeping the RobustBench checkpoint as old model")
+                            else:
+                                checkpoint = torch.load(old_model_fname, map_location=device)
+                                old_model.load_state_dict(checkpoint['model_state_dict'])
+                                logger.debug(f"Finetuning using as old model the checkpoint in {old_model_fname}")
+
                         if not args.test_only:
-                            logger.debug('Start training...')
-                            train_pct_model(model=model, old_model=old_model,
-                                            train_loader=train_loader, val_loader=val_loader,
-                                            epochs=args.epochs, optim=args.optim,
-                                            loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
-                                            alpha=alpha, beta=beta, ds_id=ds_id,
-                                            adv_training=adv_at_sel,#args.adv_tr,
-                                            logger=logger, exp_dir=params_dir_path)#, writer=writer)
+                            if os.path.exists(model_fname) and not args.train_overwrite:
+                                logger.debug(f'Model already exist at {model_fname}')
+                            else:
+                                logger.debug('Start training...')
+                                train_pct_model(model=model, old_model=old_model,
+                                                train_loader=train_loader, val_loader=val_loader,
+                                                epochs=args.epochs, optim=args.optim,
+                                                loss_name=loss_name, lr=args.lr, random_seed=args.random_seed, device=device,
+                                                alpha=alpha, beta=beta, ds_id=ds_id,
+                                                adv_training=adv_at_sel,#args.adv_tr,
+                                                logger=logger, exp_dir=params_dir_path)#, writer=writer)
 
                     except Exception as e:
                         logger.debug('Training failed.')
@@ -454,17 +475,20 @@ def train_pct_pipeline(args):
                     
                     # If trained model has not been saved skip and try next configuration
                     # Otherwise start the evaluation
-                    model_fname = os.path.join(params_dir_path, 'checkpoints', "last.pt")
                     if not os.path.exists(model_fname):
                         logger.debug(f"Pretrained model does not exist: {model_fname}")
                         continue
 
                     checkpoint = torch.load(model_fname, map_location=device)
                     model.load_state_dict(checkpoint['model_state_dict'])
-                    
-                    # for ds_loader, ds_name in zip([val_loader, test_loader], ['val', 'test']):    
-                    # for ds_loader, ds_name in zip([test_loader], ['test']):       
-                    for ds_loader, ds_name in zip([test_loader, val_loader], ['test', 'val']):                        
+
+                    loader_list = [test_loader]   
+                    ds_name_list = ['test']
+                    if args.eval_val_set:
+                        loader_list.append(val_loader)  
+                        ds_name_list.append('val')  
+
+                    for ds_loader, ds_name in zip(loader_list, ds_name_list):                        
                         results_fname = os.path.join(params_dir_path, f"results_{ds_name}.gz")
                         clean_results_fname = os.path.join(params_dir_path, f"results_clean_{ds_name}.gz")
                         adv_results_fname = os.path.join(params_dir_path, f"results_advx_{ds_name}.gz")
@@ -674,10 +698,21 @@ if __name__ == '__main__':
     parser.add_argument('-betas_pct', default=[2.], type=float, nargs='+')
 
     
-    parser.add_argument('-date', action='store_true')
-    parser.add_argument('-test_only', action='store_true')
-    parser.add_argument('-test_overwrite', action='store_true')
-
+    parser.add_argument('-date', action='store_true',
+                        help='set to add the timestamp to the exp folder name')
+    parser.add_argument('-test_only', action='store_true',
+                        help='set to skip the training (assuming the checkpoints already exist)')
+    parser.add_argument('-test_overwrite', action='store_true',
+                        help='set to overwrite the evaluations')
+    parser.add_argument('-train_overwrite', action='store_true',
+                    help='set to overwrite the trained model')
+    parser.add_argument('-eval_val_set', action='store_true', 
+                        help='set to evaluate also clean and robust metrics on the validation set')
+    parser.add_argument('-sequential', action='store_true',
+                        help='set to use as old model the last finetuning results,'\
+                            'e.g. old-1_new-2 will use as old model the one obtained by exps in old-0_new-1 using the same loss and hparams.')
+    parser.add_argument('-skip_first', action='store_true', 
+                        help='if sequential is True, skip first model pairs as Im using already existing checkpoints to start')
     parser.add_argument('-dataset', default=ut.cifar10_id, type=str, 
                         choices=[ut.cifar10_id, ut.imagenet_id])
     
