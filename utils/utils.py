@@ -16,18 +16,6 @@ import pickle
 import json
 import os
 
-# ordinati dalla leaderboard su github (a fine pagina)
-
-# #ordinati per la robustness misurata su 2k sample advx
-# MODEL_NAMES = [
-# 'Zhang2020Attacks',
-# 'Rice2020Overfitting',
-# 'Rade2021Helper_R18_ddpm',
-# 'Hendrycks2019Using',
-# 'Addepalli2021Towards_WRN34',
-# 'Carmon2019Unlabeled',
-# ]
-
 cifar10_id = 'cifar10'
 imagenet_id = 'imagenet'
 
@@ -91,49 +79,6 @@ MODEL_NAMES[imagenet_id] = [
 'Liu2023Comprehensive_ConvNeXt-B',  # 76.02 / 55.82 (ConvNeXt-B)
 'Liu2023Comprehensive_Swin-L',      # 78.92 / 59.56 (Swin-L)
 ]
-
-# MODEL_NAMES = ['Standard', #81
-# 'Engstrom2019Robustness', #53
-# 'Rice2020Overfitting', #44
-# 'Zhang2020Attacks', #43
-# 'Rade2021Helper_R18_ddpm', #30
-# 'Addepalli2021Towards_WRN34', #25
-# 'Carmon2019Unlabeled', #23
-# 'Hendrycks2019Using', #18
-# 'Kang2021Stable', #6
-# 'Gowal2020Uncovering_70_16_extra', #3
-# 'Gowal2021Improving_70_16_ddpm_100m' #2
-# ]
-
-# MODEL_NAMES = ['Addepalli2021Towards_WRN34',
-# 'Chan2020Jacobian',
-# 'Cui2020Learnable_34_20',
-# 'Engstrom2019Robustness',
-# 'Hendrycks2019Using',
-# 'Jang2019Adversarial',
-# 'Kang2021Stable']
-
-# MODEL_NAMES = ['Rebuffi2021Fixing_70_16_cutmix_extra',
-# 'Gowal2020Uncovering_70_16_extra',
-# 'Rebuffi2021Fixing_70_16_cutmix_ddpm',
-# 'Gowal2021Improving_28_10_ddpm_100m',
-# 'Rade2021Helper_extra',
-# 'Sehwag2021Proxy_ResNest152',
-# 'Dai2021Parameterizing',
-# 'Rebuffi2021Fixing_28_10_cutmix_ddpm',
-# 'Sehwag2021Proxy',
-# 'Zhang2020Geometry',
-# 'Addepalli2021Towards_WRN34',
-# 'Rade2021Helper_R18_extra',
-# 'Rebuffi2021Fixing_R18_ddpm',
-# 'Wu2020Adversarial',
-# 'Pang2020Boosting',
-# 'Rice2020Overfitting',
-# 'Cui2020Learnable_34_10',
-# 'Addepalli2021Towards_RN18',
-# 'Andriushchenko2020Understanding',
-# 'Wong2020Fast']
-# todo: aggiungere funzioni per scegliere il tipo di ordinamento e selezionare quanti e quali modelli
 
 advx_fname = lambda model_name: f'advx_WB_{model_name}.gz'
 preds_fname = lambda model_name: f"{model_name}_predictions.csv"
@@ -232,27 +177,6 @@ def str_to_hps(s):
     hps['alpha'] = float(alpha.split('-')[-1])
     hps['beta'] = float(beta.split('-')[-1])
     return hps
-# Default
-# def parse_args():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('-seed', default=0, type=int)
-#     parser.add_argument('-n_examples', default=20, type=int)
-#     parser.add_argument('-n_tr_examples', default=20, type=int)
-#     parser.add_argument('-eps', default=0.03, type=float)
-#     parser.add_argument('-n_steps', default=5,  type=int)
-#     parser.add_argument('-n_models', default=5, type=int)
-#     parser.add_argument('-batch_size', default=5, type=int)
-#     parser.add_argument('-root', default='data', type=str)
-#     parser.add_argument('-exp_name', default='exp', type=str)
-#     parser.add_argument('-exp_ft_name', default='exp_ft', type=str)
-#     parser.add_argument('-cuda_id', default=0, type=int)
-#     # Finetuning parameters
-#     parser.add_argument('-lr', default=1e-1, type=float)
-#     parser.add_argument('-epochs', default=10, type=int)
-#     parser.add_argument('-gamma1', default=1, type=float)
-#     parser.add_argument('-gamma2', default=0, type=float)
-#     args = parser.parse_args()
-#     return args
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -291,6 +215,7 @@ def init_logger(root, fname='progress', level=logging.DEBUG):
     logger.addHandler(streamhandler)
     return logger
 
+
 def save_params(local_items, dirname, fname):
     s = ''
     for k, v in local_items:
@@ -298,7 +223,6 @@ def save_params(local_items, dirname, fname):
 
     with open(join(dirname, f"{fname}.txt"), 'w') as f:
         f.write(s)
-
 
 
 def load_train_set(
@@ -333,31 +257,3 @@ def load_train_set(
         y_tr_tensor = y_tr_tensor[:n_examples]
 
     return x_tr_tensor, y_tr_tensor
-
-def rotate(x, theta):
-    theta = np.radians(theta)
-    c, s = np.cos(theta), np.sin(theta)
-    R = np.array(((c, -s), (s, c)))
-
-    center = x.mean(axis=0)
-    x = x - center
-    x_rot = R.dot(x.T).T
-    x_rot = x_rot + center
-
-    # import matplotlib.pyplot as plt
-    #
-    # fig, ax = plt.subplots()
-    # ax.scatter(x[:, 0], x[:, 1])
-    #
-    # ax.scatter(x_rot[:, 0], x_rot[:, 1])
-    # fig.show()
-    return x_rot
-
-
-if __name__ == '__main__':
-    pd.set_option('display.max_rows', 500)
-    pd.set_option('display.max_columns', 500)
-    pd.set_option('display.width', 1000)
-
-    models_info = get_model_info()
-    print("")

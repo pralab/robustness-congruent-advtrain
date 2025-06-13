@@ -9,27 +9,6 @@ import utils.utils as ut
 import os
 
 
-
-# def check_baseline_clean(mid, ds_name, logger, random_seed, ds_id=ut.cifar10_id, sel_advx=False):
-#     """
-#     If baseline advx already exists for model<mid> load it in correct_adv
-#     otherwise compute, save and return
-#     """
-#     type = 'clean' if not sel_advx else 'advx'
-#     root = f'results/{type}' if ds_id==ut.cifar10_id else f'results/{type}-imagenet'
-#     correct_adv_fname = os.path.join(root, ut.MODEL_NAMES[ds_id][mid], f"correct_preds_{ds_name}.gz")
-#     try:
-#         # Load WB advx predictions of Mold
-#         with open(correct_adv_fname, 'rb') as f:
-#             correct = pickle.load(f)
-#     except:
-#         logger.debug(f"Baseline {ds_name} advx for M{mid} does not exist. Generating...")
-#         ut.set_all_seed(random_seed)
-#         generate_baseline_advx(mid, ds_name=ds_name)
-#         with open(correct_adv_fname, 'rb') as f:
-#             correct_adv = pickle.load(f)
-#     return correct
-
 def get_pct_results(new_model, ds_loader, old_correct=None, old_model=None, device=None):
     if device is None:
         device = torch.device("cuda:0" if torch.cuda.is_available()
@@ -105,10 +84,6 @@ def get_ds_outputs(model, ds_loader, device):
     outputs = torch.cat(outputs)
     return outputs
 
-
-# def compute_nflips(old_preds, new_preds, y):
-#     nf_idxs = (old_preds != new_preds) & (old_preds == y)
-#     return nf_idxs.mean()
 
 
 def compute_nflips(old_preds, new_preds, indexes=False):
@@ -203,25 +178,3 @@ def evaluate_acc(model, device, test_loader, epoch=None, loss_fn=None):
 
         test_loss /= len(test_loader.dataset)
     return correct / len(test_loader.dataset)
-
-
-if __name__ == "__main__":
-    import pandas as pd
-    # from secml.utils import fm
-
-    # MODEL_NAMES = ['Kang2021Stable',
-    #                'Rebuffi2021Fixing_70_16_cutmix_extra',
-    #                'Gowal2021Improving_70_16_ddpm_100m']
-
-    # ROOT = 'data'
-    # exp_folder_name = fm.join(ROOT, 'exp_prova2')
-    # advx_folder = fm.join(exp_folder_name, 'advx')
-    # predictions_folder = fm.join(exp_folder_name, 'predictions')
-
-    # df_old = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[0]}_predictions.csv"), index_col=0)
-    # df_new = pd.read_csv(fm.join(predictions_folder, f"{MODEL_NAMES[1]}_predictions.csv"), index_col=0)
-
-
-
-
-    print("")

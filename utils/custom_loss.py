@@ -21,7 +21,6 @@ class BaseLoss(Module):
             for k in key:
                 self.loss_path[k] = []
 
-
     def _update_loss_path(self, losses, keys):
         for key, loss in list(zip(keys, losses)):
             self.loss_path[key].append(loss.item())
@@ -39,18 +38,6 @@ class BasePCTLoss(BaseLoss):
         preds = torch.argmax(outs, dim=1)
         correct = (preds == target)
         return outs, correct
-
-    # def _compute_loss_pc(self, output, old_correct, old_output,
-    #                      alpha=None, beta=None):
-    #     alpha = self.alpha1 if alpha is None else alpha
-    #     beta = self.beta1 if beta is None else beta
-
-    #     f_pc = self.alpha1 + self.beta1 * old_correct
-    #     D_pc = torch.mean((output - old_output).pow(2), dim=1) / 2
-    #     loss_pc = torch.mean(f_pc * D_pc)
-    #     return loss_pc
-
-
 
 
 class MyCrossEntropyLoss(BaseLoss, CrossEntropyLoss):
@@ -111,13 +98,10 @@ class PCTLoss(BasePCTLoss):
 
         D_focal = torch.mean((model_output - old_outs).pow(2), dim=1) / 2
         loss_focal = torch.mean(old_correct * D_focal)
-        # loss_focal = torch.sum(old_correct * D_focal) / old_correct.sum()
 
         # # combine CE loss and PCT loss
-        # loss = (1 - self.alpha - self.beta) * loss_ce + self.alpha * loss_distill + self.beta * loss_focal
         loss = loss_ce + self.alpha * loss_distill + self.beta * loss_focal
-        
-        
+
         if self.keep_loss_path:
             self._update_loss_path((loss, loss_ce, loss_distill, loss_focal), self.loss_keys)
 
@@ -126,7 +110,7 @@ class PCTLoss(BasePCTLoss):
 
 
 
-class MixedPCTLoss(BasePCTLoss):
+class RCATLoss(BasePCTLoss):
     def __init__(self, old_output, new_output,
                  alpha=0, beta=1, only_nf=False):
         """
@@ -137,7 +121,7 @@ class MixedPCTLoss(BasePCTLoss):
         :param alpha1: pure distillation, to deprecate
         :param beta1: bonus for NF, only one useful here
         """
-        super(MixedPCTLoss, self).__init__()
+        super(RCATLoss, self).__init__()
         self.old_output = old_output
         self.new_output = new_output
         self.alpha = alpha
@@ -191,10 +175,6 @@ class MixedPCTLoss(BasePCTLoss):
         
         if self.only_nf:
             old_correct = old_correct.logical_and(new_correct.logical_not())
-
-        # print(f"outs sum: {model_output.sum().item()}")
-        # print(f"old_outs sum: {old_outs.sum().item()}")
-        # print(f"new_outs sum: {new_outs.sum().item()}")
         
         # Stay near the initial model before finetuning ...
         D_dist = torch.mean((model_output - new_outs).pow(2), dim=1) / 2

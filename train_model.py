@@ -1,13 +1,12 @@
 from utils.data import get_cifar10_dataset, split_train_valid, get_imagenet_dataset
 from utils.trainer import pc_train_epoch, adv_pc_train_epoch, freeze_network, fgsm_attack
 from utils.eval import get_ds_outputs, get_pct_results, compute_nflips, compute_pflips, compute_common_nflips, correct_predictions
-from utils.custom_loss import PCTLoss, MixedPCTLoss
+from utils.custom_loss import PCTLoss, RCATLoss
 from utils.data import MyTensorDataset
 from utils.visualization import show_hps_behaviour, plot_loss
 import utils.utils as ut
 
 from generate_advx import generate_advx, check_baseline
-from manage_files import delete_advx_ts
 
 import torch
 from torch.utils.data import DataLoader
@@ -131,10 +130,10 @@ def train_pct_model(model, old_model,
         mixmse = False
         new_model = None
     elif loss_name == 'MixMSE':
-        loss_fn = MixedPCTLoss(old_output=old_outputs, new_output=new_outputs,
-                                alpha=alpha, beta=beta,
-                                only_nf=False)
-        # val_loss_fn = MixedPCTLoss(old_output=old_outputs, new_output=new_outputs,
+        loss_fn = RCATLoss(old_output=old_outputs, new_output=new_outputs,
+                           alpha=alpha, beta=beta,
+                           only_nf=False)
+        # val_loss_fn = RCATLoss(old_output=old_outputs, new_output=new_outputs,
         #                            alpha=alpha, beta=beta, only_nf=False)
         if adv_training:
             new_model = deepcopy(model).to(device)
@@ -588,8 +587,7 @@ def train_pct_pipeline(args):
                                 
                                 with open(adv_results_fname, 'wb') as f:
                                     pickle.dump(adv_results, f)
-                                
-                                # delete_advx_ts(params_dir_path)
+
                                 advx_check = True
 
                             except Exception as e:
